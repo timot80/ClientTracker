@@ -145,6 +145,7 @@ class ClientTrackerApp:
             self.local_poller = LocalTelemetryPoller(
                 ping_host=self.config.local.ping_host,
                 sound_alerts=self.config.local.sound_alerts,
+                identity_helper_path=self.config.local.identity_helper_path,
             )
 
     def _poll_wlc(self):

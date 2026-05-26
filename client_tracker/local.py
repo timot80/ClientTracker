@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import math
+import json
 import subprocess
 import sys
 from datetime import datetime
+from pathlib import Path
 
 from .models import LocalClientState
 
@@ -111,6 +113,17 @@ def parse_system_profiler_wifi_status(output: str) -> str:
     return ""
 
 
+def parse_identity_helper_output(output: str) -> tuple[str, str]:
+    payload = json.loads(output)
+    if not isinstance(payload, dict):
+        raise ValueError("identity helper returned non-object JSON")
+    if payload.get("error"):
+        raise RuntimeError(str(payload["error"]))
+    ssid = payload.get("ssid", "")
+    bssid = payload.get("bssid", "")
+    return str(ssid), str(bssid)
+
+
 def parse_netsh_output(output: str) -> LocalClientState:
     values = {}
     for line in output.splitlines():
@@ -173,10 +186,12 @@ class LocalTelemetryPoller:
         ping_host: str = "",
         sound_alerts: bool = True,
         platform: str | None = None,
+        identity_helper_path: str = "",
     ):
         self.ping_host = ping_host
         self.sound_alerts = sound_alerts
         self.platform = platform or sys.platform
+        self.identity_helper_path = identity_helper_path
 
     def poll(self) -> LocalClientState:
         if self.platform == "darwin":
@@ -186,7 +201,9 @@ class LocalTelemetryPoller:
                     timeout=15,
                     stderr=subprocess.DEVNULL,
                 )
-                return parse_wdutil_output(output.decode("utf-8", errors="replace"))
+                state = parse_wdutil_output(output.decode("utf-8", errors="replace"))
+                self._enrich_identity(state)
+                return state
             except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as exc:
                 raise RuntimeError(
                     "macOS local telemetry requires sudo for 'wdutil info'. "
@@ -207,6 +224,21 @@ class LocalTelemetryPoller:
                 state.ping_status = self._ping()
             return state
         raise RuntimeError(f"Local telemetry is unsupported on {self.platform}")
+
+    def _enrich_identity(self, state: LocalClientState):
+        if not self.identity_helper_path:
+            return
+        if state.ssid != "<redacted>" and state.bssid != "<redacted>":
+            return
+        helper_path = Path(self.identity_helper_path)
+        if not helper_path.is_absolute():
+            raise RuntimeError("identity helper path must be an absolute path")
+        output = subprocess.check_output([self.identity_helper_path], timeout=10)
+        ssid, bssid = parse_identity_helper_output(output.decode("utf-8", errors="replace"))
+        if state.ssid == "<redacted>" and ssid:
+            state.ssid = ssid
+        if state.bssid == "<redacted>" and bssid:
+            state.bssid = bssid
 
     def _poll_macos_fallback(self) -> LocalClientState:
         state = LocalClientState(platform="darwin", timestamp=datetime.now())

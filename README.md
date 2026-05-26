@@ -42,6 +42,7 @@ ap:
 local:
   ping_host: "8.8.8.8"
   sound_alerts: true
+  identity_helper_path: ""
 ```
 
 Environment variables override file values:
@@ -53,6 +54,24 @@ Environment variables override file values:
 - `CLIENT_TRACKER_AP_USERNAME`
 - `CLIENT_TRACKER_AP_PASSWORD`
 - `CLIENT_TRACKER_AP_ENABLE`
+
+### macOS SSID/BSSID unredaction helper
+
+On modern macOS, `wdutil` can return `<redacted>` for SSID and BSSID even when run with sudo. ClientTracker can optionally call an explicitly configured local helper to fill only those two fields while keeping RF metrics from `wdutil`.
+
+Example:
+
+```yaml
+local:
+  identity_helper_path: "/Users/you/Applications/wifi-unredactor.app/Contents/MacOS/wifi-unredactor"
+```
+
+Security notes:
+
+- ClientTracker never downloads, installs, or auto-discovers this helper.
+- The helper path must be configured explicitly in local `config.yaml`.
+- The helper is executed without a shell and is expected to print JSON with `ssid` and `bssid` fields.
+- Review any helper source before configuring it.
 
 ## Usage
 

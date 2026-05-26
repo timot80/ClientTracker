@@ -3,7 +3,8 @@ import subprocess
 import pytest
 
 from client_tracker.local import LocalTelemetryPoller
-from client_tracker.local import parse_airport_output, parse_netsh_output, parse_wdutil_output
+from client_tracker.local import parse_airport_output, parse_identity_helper_output
+from client_tracker.local import parse_netsh_output, parse_wdutil_output
 
 
 def test_parse_airport_output_preserves_multi_word_ssid():
@@ -107,6 +108,61 @@ AWDL
 
     assert state.interface_name == "en0"
     assert state.channel == "5g153/20"
+
+
+def test_parse_identity_helper_output_reads_ssid_bssid():
+    ssid, bssid = parse_identity_helper_output(
+        '{"interface":"en0","ssid":"Corp Guest WiFi","bssid":"aa:bb:cc:dd:ee:ff"}'
+    )
+
+    assert ssid == "Corp Guest WiFi"
+    assert bssid == "aa:bb:cc:dd:ee:ff"
+
+
+def test_macos_poller_enriches_redacted_wdutil_with_identity_helper(monkeypatch):
+    calls = []
+
+    def fake_check_output(argv, timeout, **_kwargs):
+        calls.append(argv)
+        if argv == ["sudo", "-n", "wdutil", "info"]:
+            return b"""
+WIFI
+    Interface Name       : en0
+    SSID                 : <redacted>
+    BSSID                : <redacted>
+    RSSI                 : -61 dBm
+"""
+        if argv == ["/Users/test/Applications/wifi-unredactor.app/Contents/MacOS/wifi-unredactor"]:
+            return b'{"interface":"en0","ssid":"Corp Guest WiFi","bssid":"aa:bb:cc:dd:ee:ff"}'
+        raise AssertionError(f"unexpected command: {argv}")
+
+    monkeypatch.setattr("subprocess.check_output", fake_check_output)
+
+    state = LocalTelemetryPoller(
+        platform="darwin",
+        identity_helper_path="/Users/test/Applications/wifi-unredactor.app/Contents/MacOS/wifi-unredactor",
+    ).poll()
+
+    assert state.ssid == "Corp Guest WiFi"
+    assert state.bssid == "aa:bb:cc:dd:ee:ff"
+    assert state.signal == "-61"
+
+
+def test_identity_helper_path_must_be_absolute():
+    state = parse_wdutil_output(
+        """
+WIFI
+    SSID                 : <redacted>
+    BSSID                : <redacted>
+"""
+    )
+    poller = LocalTelemetryPoller(
+        platform="darwin",
+        identity_helper_path="wifi-unredactor",
+    )
+
+    with pytest.raises(RuntimeError, match="absolute path"):
+        poller._enrich_identity(state)
 
 
 def test_macos_poller_uses_sudo_wdutil_by_default(monkeypatch):

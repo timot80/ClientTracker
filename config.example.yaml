@@ -12,3 +12,4 @@ ap:
 local:
   ping_host: "8.8.8.8"
   sound_alerts: true
+  identity_helper_path: ""

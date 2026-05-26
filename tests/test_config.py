@@ -17,6 +17,7 @@ ap:
 local:
   ping_host: "1.1.1.1"
   sound_alerts: false
+  identity_helper_path: "/Users/test/Applications/wifi-unredactor.app/Contents/MacOS/wifi-unredactor"
 """,
         encoding="utf-8",
     )
@@ -29,6 +30,7 @@ local:
     assert cfg.ap.username == "ap-admin"
     assert cfg.local.ping_host == "1.1.1.1"
     assert cfg.local.sound_alerts is False
+    assert cfg.local.identity_helper_path == "/Users/test/Applications/wifi-unredactor.app/Contents/MacOS/wifi-unredactor"
 
 
 def test_load_config_does_not_require_file_for_local_mode(tmp_path):

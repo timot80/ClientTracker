@@ -28,6 +28,7 @@ class APConfig:
 class LocalConfig:
     ping_host: str = ""
     sound_alerts: bool = True
+    identity_helper_path: str = ""
 
 
 @dataclass
@@ -82,6 +83,7 @@ def load_config(path: str | Path, require_infra: bool) -> AppConfig:
         local=LocalConfig(
             ping_host=str(local_data.get("ping_host", "")),
             sound_alerts=bool(local_data.get("sound_alerts", True)),
+            identity_helper_path=str(local_data.get("identity_helper_path", "")),
         ),
     )
     if require_infra:
