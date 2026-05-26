@@ -39,6 +39,23 @@ def parse_airport_output(output: str) -> LocalClientState:
     )
 
 
+def parse_networksetup_output(output: str) -> str:
+    prefix = "Current Wi-Fi Network:"
+    for line in output.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(prefix):
+            return stripped[len(prefix) :].strip()
+    return ""
+
+
+def parse_system_profiler_wifi_status(output: str) -> str:
+    for line in output.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("Status:"):
+            return stripped
+    return ""
+
+
 def parse_netsh_output(output: str) -> LocalClientState:
     values = {}
     for line in output.splitlines():
@@ -108,8 +125,11 @@ class LocalTelemetryPoller:
 
     def poll(self) -> LocalClientState:
         if self.platform == "darwin":
-            output = subprocess.check_output([AIRPORT, "-I"], timeout=15)
-            return parse_airport_output(output.decode("utf-8", errors="replace"))
+            try:
+                output = subprocess.check_output([AIRPORT, "-I"], timeout=15)
+                return parse_airport_output(output.decode("utf-8", errors="replace"))
+            except FileNotFoundError:
+                return self._poll_macos_fallback()
         if self.platform == "win32":
             output = subprocess.check_output(
                 ["netsh", "wlan", "show", "interfaces"],
@@ -120,6 +140,30 @@ class LocalTelemetryPoller:
                 state.ping_status = self._ping()
             return state
         raise RuntimeError(f"Local telemetry is unsupported on {self.platform}")
+
+    def _poll_macos_fallback(self) -> LocalClientState:
+        state = LocalClientState(platform="darwin", timestamp=datetime.now())
+        try:
+            ssid_output = subprocess.check_output(
+                ["networksetup", "-getairportnetwork", "en0"],
+                timeout=10,
+            )
+            state.ssid = parse_networksetup_output(
+                ssid_output.decode("utf-8", errors="replace")
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+            state.ssid = ""
+        try:
+            profiler_output = subprocess.check_output(
+                ["system_profiler", "SPAirPortDataType", "-detailLevel", "mini"],
+                timeout=20,
+            )
+            state.ping_status = parse_system_profiler_wifi_status(
+                profiler_output.decode("utf-8", errors="replace")
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+            state.ping_status = "airport unavailable"
+        return state
 
     def _ping(self) -> str:
         try:

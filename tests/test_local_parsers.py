@@ -1,4 +1,5 @@
 from client_tracker.local import parse_airport_output, parse_netsh_output
+from client_tracker.local import LocalTelemetryPoller
 
 
 def test_parse_airport_output_preserves_multi_word_ssid():
@@ -40,3 +41,32 @@ def test_parse_netsh_output_preserves_multi_word_ssid_and_signal():
     assert state.tx_rate == "960"
     assert state.signal == "-59.0 approx dBm"
     assert state.platform == "win32"
+
+
+def test_macos_poller_falls_back_when_airport_is_missing(monkeypatch):
+    calls = []
+
+    def fake_check_output(argv, timeout):
+        calls.append(argv)
+        if argv[0].endswith("/airport"):
+            raise FileNotFoundError(argv[0])
+        if argv == ["networksetup", "-getairportnetwork", "en0"]:
+            return b"Current Wi-Fi Network: Corp Guest WiFi\n"
+        if argv == ["system_profiler", "SPAirPortDataType", "-detailLevel", "mini"]:
+            return b"""
+Wi-Fi:
+  Interfaces:
+    en0:
+      MAC Address: 7a:42:25:0f:94:66
+      Status: Connected
+"""
+        raise AssertionError(f"unexpected command: {argv}")
+
+    monkeypatch.setattr("subprocess.check_output", fake_check_output)
+
+    state = LocalTelemetryPoller(platform="darwin").poll()
+
+    assert state.platform == "darwin"
+    assert state.ssid == "Corp Guest WiFi"
+    assert state.bssid == ""
+    assert state.ping_status == "Status: Connected"
