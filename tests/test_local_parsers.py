@@ -1,5 +1,7 @@
-from client_tracker.local import parse_airport_output, parse_netsh_output
+import subprocess
+
 from client_tracker.local import LocalTelemetryPoller
+from client_tracker.local import parse_airport_output, parse_netsh_output, parse_wdutil_output
 
 
 def test_parse_airport_output_preserves_multi_word_ssid():
@@ -43,11 +45,58 @@ def test_parse_netsh_output_preserves_multi_word_ssid_and_signal():
     assert state.platform == "win32"
 
 
-def test_macos_poller_falls_back_when_airport_is_missing(monkeypatch):
+def test_parse_wdutil_output_preserves_roam_fields():
+    output = """
+    SSID                 : Corp Guest WiFi
+    BSSID                : aa:bb:cc:dd:ee:ff
+    Channel              : 36
+    RSSI                 : -61 dBm
+    Noise                : -92 dBm
+    Tx Rate              : 1201 Mbps
+"""
+    state = parse_wdutil_output(output)
+
+    assert state.ssid == "Corp Guest WiFi"
+    assert state.bssid == "aa:bb:cc:dd:ee:ff"
+    assert state.channel == "36"
+    assert state.signal == "-61"
+    assert state.noise == "-92"
+    assert state.tx_rate == "1201"
+    assert state.platform == "darwin"
+
+
+def test_macos_poller_uses_sudo_wdutil_by_default(monkeypatch):
     calls = []
 
-    def fake_check_output(argv, timeout):
+    def fake_check_output(argv, timeout, **_kwargs):
         calls.append(argv)
+        if argv == ["sudo", "-n", "wdutil", "info"]:
+            return b"""
+SSID                 : Corp Guest WiFi
+BSSID                : aa:bb:cc:dd:ee:ff
+Channel              : 36
+RSSI                 : -61 dBm
+"""
+        raise AssertionError(f"unexpected command: {argv}")
+
+    monkeypatch.setattr("subprocess.check_output", fake_check_output)
+
+    state = LocalTelemetryPoller(platform="darwin").poll()
+
+    assert calls[0] == ["sudo", "-n", "wdutil", "info"]
+    assert state.ssid == "Corp Guest WiFi"
+    assert state.bssid == "aa:bb:cc:dd:ee:ff"
+    assert state.channel == "36"
+    assert state.signal == "-61"
+
+
+def test_macos_poller_falls_back_when_wdutil_and_airport_are_unavailable(monkeypatch):
+    calls = []
+
+    def fake_check_output(argv, timeout, **_kwargs):
+        calls.append(argv)
+        if argv == ["sudo", "-n", "wdutil", "info"]:
+            raise subprocess.CalledProcessError(1, argv, b"sudo: a password is required")
         if argv[0].endswith("/airport"):
             raise FileNotFoundError(argv[0])
         if argv == ["networksetup", "-getairportnetwork", "en0"]:
@@ -66,6 +115,7 @@ Wi-Fi:
 
     state = LocalTelemetryPoller(platform="darwin").poll()
 
+    assert calls[0] == ["sudo", "-n", "wdutil", "info"]
     assert state.platform == "darwin"
     assert state.ssid == "Corp Guest WiFi"
     assert state.bssid == ""

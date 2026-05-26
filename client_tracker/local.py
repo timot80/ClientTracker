@@ -39,6 +39,33 @@ def parse_airport_output(output: str) -> LocalClientState:
     )
 
 
+def _strip_units(value: str, *units: str) -> str:
+    cleaned = value.strip()
+    for unit in units:
+        if cleaned.endswith(unit):
+            return cleaned[: -len(unit)].strip()
+    return cleaned
+
+
+def parse_wdutil_output(output: str) -> LocalClientState:
+    values = {}
+    for line in output.splitlines():
+        parsed = _value_after_colon(line)
+        if parsed:
+            key, value = parsed
+            values[key] = value
+    return LocalClientState(
+        ssid=values.get("SSID", ""),
+        bssid=values.get("BSSID", ""),
+        channel=values.get("Channel", ""),
+        tx_rate=_strip_units(values.get("Tx Rate", ""), " Mbps", "Mbps"),
+        signal=_strip_units(values.get("RSSI", ""), " dBm", "dBm"),
+        noise=_strip_units(values.get("Noise", ""), " dBm", "dBm"),
+        platform="darwin",
+        timestamp=datetime.now(),
+    )
+
+
 def parse_networksetup_output(output: str) -> str:
     prefix = "Current Wi-Fi Network:"
     for line in output.splitlines():
@@ -126,9 +153,18 @@ class LocalTelemetryPoller:
     def poll(self) -> LocalClientState:
         if self.platform == "darwin":
             try:
+                output = subprocess.check_output(
+                    ["sudo", "-n", "wdutil", "info"],
+                    timeout=15,
+                    stderr=subprocess.DEVNULL,
+                )
+                return parse_wdutil_output(output.decode("utf-8", errors="replace"))
+            except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+                pass
+            try:
                 output = subprocess.check_output([AIRPORT, "-I"], timeout=15)
                 return parse_airport_output(output.decode("utf-8", errors="replace"))
-            except FileNotFoundError:
+            except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
                 return self._poll_macos_fallback()
         if self.platform == "win32":
             output = subprocess.check_output(
