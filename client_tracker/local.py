@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime
@@ -119,9 +120,16 @@ def parse_identity_helper_output(output: str) -> tuple[str, str]:
         raise ValueError("identity helper returned non-object JSON")
     if payload.get("error"):
         raise RuntimeError(str(payload["error"]))
-    ssid = payload.get("ssid", "")
-    bssid = payload.get("bssid", "")
-    return str(ssid), str(bssid)
+    ssid = _clean_identity_value(str(payload.get("ssid", "")))
+    bssid = _clean_identity_value(str(payload.get("bssid", "")))
+    return ssid, bssid
+
+
+def _clean_identity_value(value: str) -> str:
+    cleaned = value.strip()
+    if cleaned.lower().startswith("failed to retrieve"):
+        return ""
+    return cleaned
 
 
 def parse_netsh_output(output: str) -> LocalClientState:
@@ -233,7 +241,11 @@ class LocalTelemetryPoller:
         helper_path = Path(self.identity_helper_path)
         if not helper_path.is_absolute():
             raise RuntimeError("identity helper path must be an absolute path")
-        output = subprocess.check_output([self.identity_helper_path], timeout=10)
+        argv = [self.identity_helper_path]
+        sudo_user = os.environ.get("SUDO_USER", "")
+        if os.geteuid() == 0 and sudo_user and sudo_user != "root":
+            argv = ["sudo", "-n", "-u", sudo_user, self.identity_helper_path]
+        output = subprocess.check_output(argv, timeout=10)
         ssid, bssid = parse_identity_helper_output(output.decode("utf-8", errors="replace"))
         if state.ssid == "<redacted>" and ssid:
             state.ssid = ssid

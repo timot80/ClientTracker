@@ -71,6 +71,7 @@ Security notes:
 - ClientTracker never downloads, installs, or auto-discovers this helper.
 - The helper path must be configured explicitly in local `config.yaml`.
 - The helper is executed without a shell and is expected to print JSON with `ssid` and `bssid` fields.
+- When ClientTracker is launched with sudo, the helper is run as the original `SUDO_USER` so macOS Location Services permissions apply to the user's app permission.
 - Review any helper source before configuring it.
 
 ## Usage

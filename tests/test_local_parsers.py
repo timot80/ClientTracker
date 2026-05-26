@@ -1,4 +1,5 @@
 import subprocess
+import os
 
 import pytest
 
@@ -119,6 +120,15 @@ def test_parse_identity_helper_output_reads_ssid_bssid():
     assert bssid == "aa:bb:cc:dd:ee:ff"
 
 
+def test_parse_identity_helper_output_ignores_failed_sentinel_values():
+    ssid, bssid = parse_identity_helper_output(
+        '{"ssid":"failed to retrieve SSID","bssid":"failed to retrieve BSSID"}'
+    )
+
+    assert ssid == ""
+    assert bssid == ""
+
+
 def test_macos_poller_enriches_redacted_wdutil_with_identity_helper(monkeypatch):
     calls = []
 
@@ -146,6 +156,40 @@ WIFI
     assert state.ssid == "Corp Guest WiFi"
     assert state.bssid == "aa:bb:cc:dd:ee:ff"
     assert state.signal == "-61"
+
+
+def test_sudo_run_invokes_identity_helper_as_original_user(monkeypatch):
+    calls = []
+
+    def fake_check_output(argv, timeout, **_kwargs):
+        calls.append(argv)
+        if argv == ["sudo", "-n", "wdutil", "info"]:
+            return b"""
+WIFI
+    SSID                 : <redacted>
+    BSSID                : <redacted>
+"""
+        if argv == [
+            "sudo",
+            "-n",
+            "-u",
+            "timotbar",
+            "/Users/test/Applications/wifi-unredactor.app/Contents/MacOS/wifi-unredactor",
+        ]:
+            return b'{"ssid":"Corp Guest WiFi","bssid":"aa:bb:cc:dd:ee:ff"}'
+        raise AssertionError(f"unexpected command: {argv}")
+
+    monkeypatch.setattr("subprocess.check_output", fake_check_output)
+    monkeypatch.setattr(os, "geteuid", lambda: 0)
+    monkeypatch.setenv("SUDO_USER", "timotbar")
+
+    state = LocalTelemetryPoller(
+        platform="darwin",
+        identity_helper_path="/Users/test/Applications/wifi-unredactor.app/Contents/MacOS/wifi-unredactor",
+    ).poll()
+
+    assert state.ssid == "Corp Guest WiFi"
+    assert state.bssid == "aa:bb:cc:dd:ee:ff"
 
 
 def test_identity_helper_path_must_be_absolute():
