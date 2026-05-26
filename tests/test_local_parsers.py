@@ -1,5 +1,7 @@
 import subprocess
 
+import pytest
+
 from client_tracker.local import LocalTelemetryPoller
 from client_tracker.local import parse_airport_output, parse_netsh_output, parse_wdutil_output
 
@@ -90,33 +92,18 @@ RSSI                 : -61 dBm
     assert state.signal == "-61"
 
 
-def test_macos_poller_falls_back_when_wdutil_and_airport_are_unavailable(monkeypatch):
+def test_macos_poller_requires_sudo_when_wdutil_cannot_run(monkeypatch):
     calls = []
 
     def fake_check_output(argv, timeout, **_kwargs):
         calls.append(argv)
         if argv == ["sudo", "-n", "wdutil", "info"]:
             raise subprocess.CalledProcessError(1, argv, b"sudo: a password is required")
-        if argv[0].endswith("/airport"):
-            raise FileNotFoundError(argv[0])
-        if argv == ["networksetup", "-getairportnetwork", "en0"]:
-            return b"Current Wi-Fi Network: Corp Guest WiFi\n"
-        if argv == ["system_profiler", "SPAirPortDataType", "-detailLevel", "mini"]:
-            return b"""
-Wi-Fi:
-  Interfaces:
-    en0:
-      MAC Address: 7a:42:25:0f:94:66
-      Status: Connected
-"""
         raise AssertionError(f"unexpected command: {argv}")
 
     monkeypatch.setattr("subprocess.check_output", fake_check_output)
 
-    state = LocalTelemetryPoller(platform="darwin").poll()
+    with pytest.raises(RuntimeError, match="requires sudo"):
+        LocalTelemetryPoller(platform="darwin").poll()
 
     assert calls[0] == ["sudo", "-n", "wdutil", "info"]
-    assert state.platform == "darwin"
-    assert state.ssid == "Corp Guest WiFi"
-    assert state.bssid == ""
-    assert state.ping_status == "Status: Connected"

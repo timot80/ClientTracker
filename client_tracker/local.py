@@ -159,8 +159,11 @@ class LocalTelemetryPoller:
                     stderr=subprocess.DEVNULL,
                 )
                 return parse_wdutil_output(output.decode("utf-8", errors="replace"))
-            except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
-                pass
+            except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as exc:
+                raise RuntimeError(
+                    "macOS local telemetry requires sudo for 'wdutil info'. "
+                    "Run 'sudo -v' first, or run the tracker with sudo."
+                ) from exc
             try:
                 output = subprocess.check_output([AIRPORT, "-I"], timeout=15)
                 return parse_airport_output(output.decode("utf-8", errors="replace"))

@@ -66,12 +66,14 @@ python client_tracker.py aa:bb:cc:dd:ee:ff --mode infra
 Local mode shows Wi-Fi telemetry from the machine running the script:
 
 ```bash
+sudo -v
 python client_tracker.py --mode local
 ```
 
 Combined mode shows infrastructure and local telemetry together:
 
 ```bash
+sudo -v
 python client_tracker.py aa:bb:cc:dd:ee:ff --mode combined
 ```
 
@@ -106,7 +108,7 @@ python client_tracker.py aabbccddeeff
 ## Platform Notes
 
 - Infrastructure tracking works on any platform that can run Python and reach the WLC/APs over SSH.
-- Local telemetry supports macOS through `airport -I`.
+- Local telemetry on macOS uses `sudo -n wdutil info` by default and requires an active sudo credential cache. Run `sudo -v` before starting, or run the tracker with sudo.
 - Local telemetry supports Windows through `netsh wlan show interfaces`.
 - Linux local telemetry is not implemented in this version; Linux can still run infrastructure mode.
 
