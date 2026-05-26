@@ -77,6 +77,12 @@ sudo -v
 python client_tracker.py aa:bb:cc:dd:ee:ff --mode combined
 ```
 
+Polling defaults are mode-specific: local mode updates every 1 second, combined mode every 2 seconds, and infrastructure mode every 5 seconds. Override with `--interval`:
+
+```bash
+sudo python client_tracker.py --mode local --interval 0.5
+```
+
 Enable CSV logging for walk-test analysis:
 
 ```bash

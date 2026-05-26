@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import signal
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -14,9 +15,6 @@ from .events import CSVLogger, EventTimeline
 from .infra import APSessionPool, WLCSession
 from .local import LocalTelemetryPoller, play_roam_sound
 from .models import APClientState, LocalClientState, Mode, TrackerEvent, WLCClientState
-
-POLL_INTERVAL = 5
-
 
 def detect_infra_roam(
     previous_ap: str,
@@ -86,10 +84,12 @@ class ClientTrackerApp:
         config: AppConfig,
         mac: str | None = None,
         log_path: str | Path | None = None,
+        poll_interval: float = 5.0,
     ):
         self.mode = mode
         self.config = config
         self.mac = mac or ""
+        self.poll_interval = poll_interval
         self.display = LiveDisplay()
         self.timeline = EventTimeline()
         self.logger = CSVLogger(log_path) if log_path else None
@@ -112,10 +112,7 @@ class ClientTrackerApp:
             while not self._stop:
                 self.poll_once()
                 live.update(self._render())
-                signal.pause() if False else None
-                import time
-
-                time.sleep(POLL_INTERVAL)
+                time.sleep(self.poll_interval)
         self.cleanup()
 
     def poll_once(self):

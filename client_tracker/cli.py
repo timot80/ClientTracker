@@ -9,6 +9,11 @@ from .config import load_config
 from .infra import is_valid_mac
 
 CONFIG_PATH = pathlib.Path(__file__).resolve().parent.parent / "config.yaml"
+DEFAULT_INTERVALS = {
+    "infra": 5.0,
+    "local": 1.0,
+    "combined": 2.0,
+}
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -23,10 +28,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Tracking mode. Defaults to infra when MAC is supplied, local otherwise.",
     )
     parser.add_argument("--log", help="Optional CSV log path")
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=None,
+        help="Polling interval in seconds. Defaults: local=1, combined=2, infra=5.",
+    )
     parser.add_argument("--check", action="store_true", help="Validate local setup and exit")
     args = parser.parse_args(argv)
     if args.mode is None:
         args.mode = "infra" if args.mac else "local"
+    if args.interval is None:
+        args.interval = DEFAULT_INTERVALS[args.mode]
+    if args.interval <= 0:
+        parser.error("--interval must be greater than 0")
     if args.mode in ("infra", "combined") and not args.mac and not args.check:
         parser.error(f"--mode {args.mode} requires a MAC address")
     if args.mac and not is_valid_mac(args.mac):
@@ -45,7 +60,13 @@ def main(argv: list[str] | None = None):
         else:
             print(f"Config not found: {CONFIG_PATH}")
         return
-    app = ClientTrackerApp(args.mode, config, mac=args.mac, log_path=args.log)
+    app = ClientTrackerApp(
+        args.mode,
+        config,
+        mac=args.mac,
+        log_path=args.log,
+        poll_interval=args.interval,
+    )
     app.run()
 
 
