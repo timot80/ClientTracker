@@ -55,12 +55,22 @@ def parse_wdutil_output(output: str) -> LocalClientState:
             key, value = parsed
             values[key] = value
     return LocalClientState(
+        interface_name=values.get("Interface Name", ""),
         ssid=values.get("SSID", ""),
         bssid=values.get("BSSID", ""),
         channel=values.get("Channel", ""),
         tx_rate=_strip_units(values.get("Tx Rate", ""), " Mbps", "Mbps"),
         signal=_strip_units(values.get("RSSI", ""), " dBm", "dBm"),
         noise=_strip_units(values.get("Noise", ""), " dBm", "dBm"),
+        cca=_strip_units(values.get("CCA", ""), " %", "%"),
+        security=values.get("Security", ""),
+        phy_mode=values.get("PHY Mode", ""),
+        mcs_index=values.get("MCS Index", ""),
+        guard_interval=values.get("Guard Interval", ""),
+        nss=values.get("NSS", ""),
+        country_code=values.get("Country Code", ""),
+        ipv4_address=values.get("IPv4 Address", ""),
+        ipv4_router=values.get("IPv4 Router", ""),
         platform="darwin",
         timestamp=datetime.now(),
     )

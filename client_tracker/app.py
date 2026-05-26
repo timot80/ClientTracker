@@ -233,6 +233,12 @@ class ClientTrackerApp:
             local_channel=self.local_state.channel if self.local_state else "",
             local_signal=self.local_state.signal if self.local_state else "",
             local_noise=self.local_state.noise if self.local_state else "",
+            local_cca=self.local_state.cca if self.local_state else "",
+            local_security=self.local_state.security if self.local_state else "",
+            local_phy_mode=self.local_state.phy_mode if self.local_state else "",
+            local_mcs_index=self.local_state.mcs_index if self.local_state else "",
+            local_nss=self.local_state.nss if self.local_state else "",
+            local_ipv4_address=self.local_state.ipv4_address if self.local_state else "",
         )
 
     def _render(self):

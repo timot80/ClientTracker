@@ -45,6 +45,7 @@ class APClientState:
 
 @dataclass
 class LocalClientState:
+    interface_name: str = ""
     ssid: str = ""
     bssid: str = ""
     channel: str = ""
@@ -52,6 +53,15 @@ class LocalClientState:
     rx_rate: str = ""
     signal: str = ""
     noise: str = ""
+    cca: str = ""
+    security: str = ""
+    phy_mode: str = ""
+    mcs_index: str = ""
+    guard_interval: str = ""
+    nss: str = ""
+    country_code: str = ""
+    ipv4_address: str = ""
+    ipv4_router: str = ""
     ping_status: str = ""
     platform: str = ""
     timestamp: datetime | None = None

@@ -85,9 +85,18 @@ class LiveDisplay:
             ts = state.timestamp.strftime("%H:%M:%S") if state.timestamp else ""
             tbl.add_row("SSID:", state.ssid or "N/A")
             tbl.add_row("BSSID:", state.bssid or "N/A")
-            tbl.add_row("Channel:", state.channel or "N/A")
-            tbl.add_row("Signal:", f"{state.signal or 'N/A'}  Noise: {state.noise or 'N/A'}")
+            tbl.add_row("Channel:", f"{state.channel or 'N/A'}  PHY: {state.phy_mode or 'N/A'}")
+            tbl.add_row(
+                "Signal:",
+                f"{state.signal or 'N/A'}  Noise: {state.noise or 'N/A'}  CCA: {state.cca or 'N/A'}",
+            )
             tbl.add_row("Rates:", f"TX: {state.tx_rate or 'N/A'}  RX: {state.rx_rate or 'N/A'}")
+            tbl.add_row(
+                "MCS:",
+                f"{state.mcs_index or 'N/A'}  NSS: {state.nss or 'N/A'}  GI: {state.guard_interval or 'N/A'}",
+            )
+            tbl.add_row("Security:", state.security or "N/A")
+            tbl.add_row("IP:", f"{state.ipv4_address or 'N/A'}  Router: {state.ipv4_router or 'N/A'}")
             tbl.add_row("Ping:", state.ping_status or "N/A")
             tbl.add_row("Updated:", ts)
         return Panel(tbl, title="Local Client Stats", width=self.PANEL_WIDTH, border_style="cyan")

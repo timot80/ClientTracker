@@ -55,6 +55,16 @@ def test_parse_wdutil_output_preserves_roam_fields():
     RSSI                 : -61 dBm
     Noise                : -92 dBm
     Tx Rate              : 1201 Mbps
+    Security             : WPA3 Enterprise
+    PHY Mode             : 11ax
+    MCS Index            : 11
+    Guard Interval       : 800
+    NSS                  : 2
+    CCA                  : 43 %
+    Country Code         : US
+    Interface Name       : en0
+    IPv4 Address         : 10.23.4.156
+    IPv4 Router          : 10.23.4.1
 """
     state = parse_wdutil_output(output)
 
@@ -64,6 +74,16 @@ def test_parse_wdutil_output_preserves_roam_fields():
     assert state.signal == "-61"
     assert state.noise == "-92"
     assert state.tx_rate == "1201"
+    assert state.security == "WPA3 Enterprise"
+    assert state.phy_mode == "11ax"
+    assert state.mcs_index == "11"
+    assert state.guard_interval == "800"
+    assert state.nss == "2"
+    assert state.cca == "43"
+    assert state.country_code == "US"
+    assert state.interface_name == "en0"
+    assert state.ipv4_address == "10.23.4.156"
+    assert state.ipv4_router == "10.23.4.1"
     assert state.platform == "darwin"
 
 

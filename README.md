@@ -102,7 +102,7 @@ python client_tracker.py aabbccddeeff
 
 - WLC Client Stats: AP name, AP IP, SSID, protocol, policy state, RSSI, and SNR.
 - AP Client Stats: AP-side RSSI, MCS/rate, channel, and SSID.
-- Local Client Stats: endpoint SSID, BSSID, channel, TX/RX rate, signal, noise, and optional ping status.
+- Local Client Stats: endpoint SSID, BSSID, channel, TX/RX rate, signal, noise, CCA, PHY, MCS, NSS, security, IPv4 address, and optional ping status.
 - Event Timeline: infrastructure AP roams, local BSSID changes, association changes, and polling errors.
 
 ## Platform Notes
