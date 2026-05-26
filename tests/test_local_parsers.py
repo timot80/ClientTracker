@@ -87,6 +87,28 @@ def test_parse_wdutil_output_preserves_roam_fields():
     assert state.platform == "darwin"
 
 
+def test_parse_wdutil_output_ignores_awdl_section():
+    output = """
+————————————————————————————————————————————————————————————————————
+WIFI
+————————————————————————————————————————————————————————————————————
+    Interface Name       : en0
+    SSID                 : Corp Guest WiFi
+    BSSID                : aa:bb:cc:dd:ee:ff
+    Channel              : 5g153/20
+    RSSI                 : -64 dBm
+————————————————————————————————————————————————————————————————————
+AWDL
+————————————————————————————————————————————————————————————————————
+    Interface Name       : awdl0
+    Channel Sequence     : 153++ 0 149++ 0
+"""
+    state = parse_wdutil_output(output)
+
+    assert state.interface_name == "en0"
+    assert state.channel == "5g153/20"
+
+
 def test_macos_poller_uses_sudo_wdutil_by_default(monkeypatch):
     calls = []
 

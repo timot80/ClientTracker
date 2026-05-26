@@ -11,6 +11,16 @@ AIRPORT = (
     "/System/Library/PrivateFrameworks/Apple80211.framework/"
     "Versions/Current/Resources/airport"
 )
+WDUTIL_SECTION_NAMES = {
+    "NETWORK",
+    "WIFI",
+    "BLUETOOTH",
+    "AWDL",
+    "POWER",
+    "WIFI FAULTS LAST HOUR",
+    "WIFI RECOVERIES LAST HOUR",
+    "WIFI LINK TESTS LAST HOUR",
+}
 
 
 def _value_after_colon(line: str) -> tuple[str, str] | None:
@@ -49,7 +59,15 @@ def _strip_units(value: str, *units: str) -> str:
 
 def parse_wdutil_output(output: str) -> LocalClientState:
     values = {}
+    has_wifi_section = any(line.strip() == "WIFI" for line in output.splitlines())
+    section = None
     for line in output.splitlines():
+        stripped = line.strip()
+        if stripped in WDUTIL_SECTION_NAMES:
+            section = stripped
+            continue
+        if has_wifi_section and section != "WIFI":
+            continue
         parsed = _value_after_colon(line)
         if parsed:
             key, value = parsed
