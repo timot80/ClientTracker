@@ -1,5 +1,6 @@
 .worktrees
 .worktrees/
+config.yaml
 __pycache__/
 *.py[cod]
 .pytest_cache/
