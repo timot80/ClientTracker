@@ -36,6 +36,11 @@ python ap_radio_monitor.py
 python ap_radio_monitor.py --refresh 30
 python ap_radio_monitor.py --once
 python ap_radio_monitor.py --only-imbalanced
+python ap_radio_monitor.py --only-problem
+python ap_radio_monitor.py --show-idle
+python ap_radio_monitor.py --hide-idle
+python ap_radio_monitor.py --limit 30
+python ap_radio_monitor.py --busy-idle-util 20
 python ap_radio_monitor.py --config config.yaml
 ```
 
@@ -45,6 +50,11 @@ Behavior:
 - `--refresh` overrides the config refresh interval.
 - `--once` prints one snapshot and exits.
 - `--only-imbalanced` hides APs that are currently balanced.
+- `--only-problem` shows `IMBALANCED`, `BUSY-IDLE`, `WARNING`, and `NO DATA` rows.
+- `--show-idle` includes all `IDLE` rows.
+- `--hide-idle` hides clean `IDLE` rows but still shows `BUSY-IDLE`.
+- `--limit` caps displayed AP rows after priority sorting.
+- `--busy-idle-util` sets the utilization threshold for zero-client APs to become `BUSY-IDLE`.
 - `--config` allows alternate config files for different WLCs or AP groups.
 
 ## Configuration
@@ -72,7 +82,12 @@ ap_balance:
   included_slots: []
   excluded_slots: []
   only_imbalanced: false
+  only_problem: false
+  show_idle: false
+  hide_idle: false
+  limit: 30
   min_total_clients: 1
+  busy_idle_utilization: 20
   imbalance:
     ratio_threshold: 10
     min_difference: 20
@@ -87,7 +102,12 @@ Defaults:
 - `included_slots`: empty list, meaning include all numeric slots.
 - `excluded_slots`: empty list.
 - `only_imbalanced`: `false`
+- `only_problem`: `false`
+- `show_idle`: `false`
+- `hide_idle`: `false`
+- `limit`: `30`
 - `min_total_clients`: `1`
+- `busy_idle_utilization`: `20`
 - `ratio_threshold`: `10`
 - `min_difference`: `20`
 - `include_zero_client_slots`: `true`
@@ -166,7 +186,7 @@ If total clients does not match the sum of numeric slot clients, the monitor kee
 
 `BalanceScore`:
 
-- `status`: `OK`, `WARNING`, `IMBALANCED`, or `INSUFFICIENT_DATA`
+- `status`: `OK`, `WARNING`, `IMBALANCED`, `IDLE`, `BUSY-IDLE`, or `INSUFFICIENT_DATA`
 - `max_clients`
 - `min_clients`
 - `spread`
@@ -179,7 +199,14 @@ The monitor scores client balance across numeric radio slots only. Slots reporte
 
 `included_slots` and `excluded_slots` are applied before scoring. If `included_slots` is non-empty, only those slot numbers are considered. Any slot in `excluded_slots` is removed after the include filter.
 
-If an AP's `total_clients` is below `min_total_clients`, the status is `INSUFFICIENT_DATA` and the row sorts below `WARNING` rows.
+If an AP's `total_clients` is below `min_total_clients`, zero-client APs are classified as `IDLE` or `BUSY-IDLE`; nonzero APs below the minimum are `INSUFFICIENT_DATA`.
+
+Zero-client APs:
+
+- `IDLE`: all active numeric slots have zero clients and every active utilization value is below `busy_idle_utilization`.
+- `BUSY-IDLE`: all active numeric slots have zero clients and at least one active utilization value is at or above `busy_idle_utilization`.
+
+`BUSY-IDLE` means the AP/radio is seeing channel activity while no clients are associated. It is not a definitive radio failure; it is an operational signal worth keeping visible.
 
 When `include_zero_client_slots` is true, active zero-client slots are included in spread calculations. Ratio calculations use the smallest nonzero client count to avoid divide-by-zero, and `0 vs N` is represented through spread and reason text.
 
@@ -199,7 +226,7 @@ An AP is `WARNING` when it is below the imbalanced thresholds but still noticeab
 
 Otherwise the AP is `OK`.
 
-`BalanceScore.status` values are `OK`, `WARNING`, `IMBALANCED`, and `INSUFFICIENT_DATA`.
+`BalanceScore.status` values are `OK`, `WARNING`, `IMBALANCED`, `IDLE`, `BUSY-IDLE`, and `INSUFFICIENT_DATA`.
 
 Examples:
 
@@ -207,41 +234,55 @@ Examples:
 - `1, 50, NA`: imbalanced because spread is `49` and ratio is `50:1`.
 - `0, 50, NA`: imbalanced because spread is `50`; ratio is shown as `N/A`.
 - `12, 18, 0`: usually OK or warning depending on thresholds.
-- `0, 0, 0`: insufficient data because there are no clients to compare.
+- `0, 0, 0` with utilization `0, 0, 0`: `IDLE`.
+- `0, 0, 0` with utilization `43, 31, 8`: `BUSY-IDLE`.
 - `7, NA, NA`: insufficient data because fewer than two comparable slots remain.
 
-Sorting severity order is `IMBALANCED`, `WARNING`, `OK`, `INSUFFICIENT_DATA`. Within a severity, sort by spread descending, then ratio descending, treating `None` ratio as lower than any numeric ratio.
+Sorting severity order is `IMBALANCED`, `BUSY-IDLE`, `WARNING`, `OK`, `IDLE`, `INSUFFICIENT_DATA`. Within a severity, sort by spread descending, then ratio descending, treating `None` ratio as lower than any numeric ratio. `BUSY-IDLE` rows sort by highest slot utilization.
+
+Default large-list behavior:
+
+- Apply AP include/exclude filters first.
+- Score all remaining APs.
+- Sort by the severity order above.
+- Display up to `limit` AP rows by default.
+- Always prioritize problem states before clean `IDLE` rows.
+- If `show_idle` is true, include idle APs in sorted order until the limit is reached.
+- If `hide_idle` is true, omit `IDLE` rows but keep `BUSY-IDLE`.
+- If `only_problem` is true, show only `IMBALANCED`, `BUSY-IDLE`, `WARNING`, and `INSUFFICIENT_DATA`.
+- If `only_imbalanced` is true, preserve the existing behavior and show only `IMBALANCED`.
 
 ## Terminal Display
 
-Default display is a compact Rich live table with inline bars:
+Default display is a compact Rich live table with one AP per row:
 
 ```text
-AP Radio Distribution Monitor | 42 APs | 4 imbalanced | Updated 16:08:12
+Last 16:08:12 | 71 APs | Showing 30 | AP Radio
 
-AP Name          Clients  Radio Client Distribution                         Balance
-NOC-AP-101       51       S0 1 █ | S1 50 ████████████████ | S2 0 ·          IMBALANCED 50:1 spread 50
-NOC-AP-204       38       S0 4 ██ | S1 34 ██████████████ | S2 0 ·           WARNING 8.5:1 spread 34
-NOC-AP-MBY-1      2       S0 0 · | S1 1 ████████ | S2 1 ████████            OK
+AP                         Cli  S0      S1      S2      S3  Balance
+NOC-AP-MBY-1                 9  2c 4%   1c 3%   6c 1%   --  WARNING 6:1 Δ6
+MBY-CON-SCC1_BAYSIDE_A-32    0  0c 43%  0c 31%  0c 8%   --  BUSY-IDLE
+MBY-CON-SCC1_BAYSIDE_A-33    0  0c 0%   0c 0%   0c 0%   --  IDLE
 ```
 
-Slot text includes utilization when space allows:
+Slot text is compact:
 
 ```text
-S0 0 cl / 43% util · | S1 1 cl / 3% util █ | S2 1 cl / 8% util █
+0c 43%
 ```
 
 Visual rules:
 
-- Bar length is relative to the busiest slot on that AP.
-- Zero clients render as a dim dot.
 - `NA` slots render as `--`.
 - `OK` rows use green status.
 - `WARNING` rows use yellow status.
 - `IMBALANCED` rows use red status.
+- `BUSY-IDLE` rows use yellow or magenta status.
+- `IDLE` rows use dim status.
 - `INSUFFICIENT_DATA` rows use dim status.
-- Imbalanced APs sort first, then warnings, then OK APs.
-- Within each status, rows sort by worst spread and ratio.
+- The table does not expand to fill very wide terminals.
+- The title shows total AP count, displayed AP count, and last poll time.
+- If rows are hidden by `limit` or filters, show a summary footer with hidden counts by status.
 
 ## Error Handling
 
@@ -269,6 +310,10 @@ Unit tests will cover:
 - AP include/exclude filtering.
 - Slot include/exclude filtering.
 - Balance scoring for `1 vs 50`, `0 vs 50`, all-zero, and balanced cases.
+- `IDLE` scoring for zero-client APs with low utilization.
+- `BUSY-IDLE` scoring for zero-client APs with high utilization.
+- Priority sorting places `BUSY-IDLE` above `WARNING` and `IDLE` below active `OK`.
+- Display limiting hides lower-priority rows and reports hidden counts.
 - Insufficient-data scoring for one comparable slot, no numeric slots, and totals below `min_total_clients`.
 - Bar rendering does not crash on empty or missing slot data.
 
