@@ -11,6 +11,7 @@ STATUS_STYLES = {
     "IMBALANCED": "red",
     "WARNING": "yellow",
     "OK": "green",
+    "IDLE": "dim",
     "INSUFFICIENT_DATA": "dim",
 }
 
@@ -108,4 +109,6 @@ def _balance_text(score: BalanceScore) -> str:
         ratio = f"{score.ratio:.1f}:1".replace(".0:1", ":1")
     if score.status == "INSUFFICIENT_DATA":
         return "NO DATA"
+    if score.status == "IDLE":
+        return "IDLE"
     return f"{score.status} {ratio} Δ{score.spread}"

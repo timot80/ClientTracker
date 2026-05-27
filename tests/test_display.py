@@ -103,6 +103,17 @@ def test_build_monitor_table_stays_compact_on_wide_terminal():
     assert len(header_line) < 120
 
 
+def test_build_monitor_table_renders_idle_for_zero_client_ap():
+    snapshot = LoadInfoSnapshot(ap_loads=[make_ap("IDLE-AP", [0, 0, 0, None])])
+    console = Console(record=True, width=120)
+
+    console.print(build_monitor_table(snapshot, APBalanceConfig()))
+    rendered = console.export_text()
+
+    assert "IDLE" in rendered
+    assert "NO DATA" not in rendered
+
+
 def test_build_monitor_table_renders_parser_warning_and_poll_error():
     snapshot = LoadInfoSnapshot(
         ap_loads=[make_ap("NOC-AP-1", [1, 50])],

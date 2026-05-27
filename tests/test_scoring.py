@@ -39,8 +39,15 @@ def test_score_zero_vs_fifty_uses_spread_without_ratio():
     assert score.ratio is None
 
 
-def test_score_returns_insufficient_data_for_all_zero_or_one_slot():
-    assert score_ap(make_ap("ZERO", [0, 0, 0]), APBalanceConfig()).status == "INSUFFICIENT_DATA"
+def test_score_returns_idle_for_all_zero_clients():
+    score = score_ap(make_ap("ZERO", [0, 0, 0]), APBalanceConfig())
+
+    assert score.status == "IDLE"
+    assert score.spread == 0
+    assert score.ratio is None
+
+
+def test_score_returns_insufficient_data_for_one_slot():
     assert score_ap(make_ap("ONE", [7, None, None]), APBalanceConfig()).status == "INSUFFICIENT_DATA"
 
 

@@ -9,7 +9,8 @@ SEVERITY_ORDER = {
     "IMBALANCED": 0,
     "WARNING": 1,
     "OK": 2,
-    "INSUFFICIENT_DATA": 3,
+    "IDLE": 3,
+    "INSUFFICIENT_DATA": 4,
 }
 
 
@@ -28,9 +29,13 @@ def score_ap(ap: APLoad, config: APBalanceConfig) -> BalanceScore:
     """Score radio client distribution for one AP."""
     comparable = _comparable_clients(ap, config)
     if ap.total_clients < config.min_total_clients:
+        if comparable and all(value == 0 for value in comparable):
+            return BalanceScore(status="IDLE", reason="zero clients")
         return BalanceScore(status="INSUFFICIENT_DATA", reason="below minimum clients")
-    if len(comparable) < 2 or not any(value > 0 for value in comparable):
+    if len(comparable) < 2:
         return BalanceScore(status="INSUFFICIENT_DATA", reason="fewer than two comparable slots")
+    if not any(value > 0 for value in comparable):
+        return BalanceScore(status="IDLE", reason="zero clients")
 
     max_clients = max(comparable)
     min_clients = min(comparable)
