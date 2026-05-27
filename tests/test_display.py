@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from rich.console import Console
 
 from ap_radio_monitor.display import build_monitor_table, render_slot_cell, render_slot_distribution
@@ -60,6 +62,19 @@ def test_build_monitor_table_uses_slot_columns_for_one_line_rows():
     assert "S3" in rendered
     assert "Radio Slots" not in rendered
     assert "2c 10%" in rendered
+
+
+def test_build_monitor_table_shows_last_polled_time_in_title():
+    snapshot = LoadInfoSnapshot(
+        ap_loads=[make_ap("NOC-AP-1", [2, 2, 1, None])],
+        timestamp=datetime(2026, 5, 27, 14, 3, 9),
+    )
+    console = Console(record=True, width=140)
+
+    console.print(build_monitor_table(snapshot, APBalanceConfig()))
+    rendered = console.export_text()
+
+    assert "Last poll 14:03:09" in rendered
 
 
 def test_build_monitor_table_renders_parser_warning_and_poll_error():
