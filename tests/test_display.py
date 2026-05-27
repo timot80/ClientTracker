@@ -32,7 +32,7 @@ def test_render_slot_distribution_uses_relative_bars_and_na_marker():
 def test_build_monitor_table_renders_parser_warning_and_poll_error():
     snapshot = LoadInfoSnapshot(
         ap_loads=[make_ap("NOC-AP-1", [1, 50])],
-        parser_warnings=["NOC-AP-1: slot sum 51 differs from total clients 50"],
+        parser_warnings=["line 12: skipped malformed row"],
         poll_error="poll failed: timeout",
     )
     console = Console(record=True, width=140)
@@ -41,4 +41,4 @@ def test_build_monitor_table_renders_parser_warning_and_poll_error():
     rendered = console.export_text()
 
     assert "poll failed: timeout" in rendered
-    assert "slot sum 51 differs from total clients 50" in rendered
+    assert "line 12: skipped malformed row" in rendered

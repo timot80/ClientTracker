@@ -40,14 +40,6 @@ def parse_load_info(output: str) -> LoadInfoSnapshot:
             parser_warnings.append(f"line {line_number}: skipped malformed row")
             continue
 
-        slot_sum = sum(slot.clients for slot in ap_load.slot_loads if slot.clients is not None)
-        if slot_sum != ap_load.total_clients:
-            warning = (
-                f"{ap_load.name}: slot sum {slot_sum} differs from total clients "
-                f"{ap_load.total_clients}"
-            )
-            ap_load.warnings.append(warning)
-            parser_warnings.append(warning)
         ap_loads.append(ap_load)
 
     if not ap_loads:

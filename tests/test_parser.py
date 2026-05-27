@@ -56,13 +56,14 @@ def test_parse_documented_wtp_mac_first_output():
     ]
 
 
-def test_parse_records_warning_when_total_disagrees_with_slot_sum():
+def test_parse_keeps_wlc_total_without_warning_when_slot_sum_differs():
     output = OBSERVED_OUTPUT.replace("   3      2       0", "   3      1       0")
     snapshot = parse_load_info(output)
 
     assert snapshot.ap_loads[0].total_clients == 1
-    assert snapshot.ap_loads[0].warnings
-    assert "slot sum 2 differs from total clients 1" in snapshot.parser_warnings[0]
+    assert [slot.clients for slot in snapshot.ap_loads[0].slot_loads] == [0, 1, 1, None]
+    assert snapshot.ap_loads[0].warnings == []
+    assert snapshot.parser_warnings == []
 
 
 def test_parse_skips_malformed_rows_but_keeps_valid_rows():
