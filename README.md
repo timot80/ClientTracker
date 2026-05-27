@@ -11,6 +11,8 @@ ClientTracker can run from a management machine to watch the infrastructure view
 - Enable-level access on APs for AP-side client stats
 - macOS or Windows for local Wi-Fi telemetry
 
+See [CLI Command Access Requirements](docs/cli-command-access.md) for the WLC, AP, and local endpoint commands used by each mode.
+
 Install dependencies:
 
 ```bash
