@@ -39,6 +39,7 @@ python client_tracker.py aa:bb:cc:dd:ee:ff
 python client_tracker.py aa:bb:cc:dd:ee:ff --mode infra
 python client_tracker.py --mode local
 python client_tracker.py aa:bb:cc:dd:ee:ff --mode combined
+python client_tracker.py --mode local --interval 0.5
 python client_tracker.py aa:bb:cc:dd:ee:ff --mode combined --log roam-test.csv
 python client_tracker.py --check
 ```
@@ -46,14 +47,22 @@ python client_tracker.py --check
 Default mode:
 
 - If a MAC is supplied and no mode is specified, use `infra`.
+- If no MAC and no mode are supplied, use `local`.
 - If `--mode local` is used, no MAC is required.
 - If `--mode combined` is used, a MAC is required.
+
+Polling interval:
+
+- Default `infra` interval is 5 seconds.
+- Default `local` interval is 1 second.
+- Default `combined` interval is 2 seconds.
+- `--interval <seconds>` overrides the mode default and must be greater than zero.
 
 The Rich terminal UI will show up to four stacked panels:
 
 - WLC Client Stats: existing controller-derived state.
 - AP Client Stats: existing AP-derived RSSI/MCS/channel state.
-- Local Client Stats: local SSID, BSSID, channel, TX/RX rate where available, signal, noise, ping status where available.
+- Local Client Stats: local SSID, BSSID, channel, TX/RX rate where available, signal, noise, CCA, PHY mode, MCS index, guard interval, NSS, security, IPv4 address, IPv4 router, and ping status where available.
 - Event Timeline: unified recent events from infrastructure and local telemetry.
 
 ## Architecture
@@ -104,6 +113,7 @@ AP state:
 
 Local state:
 
+- interface name
 - SSID
 - BSSID
 - channel
@@ -111,6 +121,15 @@ Local state:
 - RX rate when available
 - signal/RSSI
 - noise when available
+- CCA when available
+- security
+- PHY mode
+- MCS index
+- guard interval
+- NSS
+- country code
+- IPv4 address
+- IPv4 router
 - ping status when configured
 - platform
 - timestamp
@@ -155,10 +174,27 @@ Combined mode:
 
 macOS local telemetry:
 
-- Use the existing `airport -I` command path from the roam script.
-- Parse SSID values after the colon so SSIDs with spaces are preserved.
+- Use `sudo -n wdutil info` as the primary telemetry source.
+- Parse only the `WIFI` section when section headers are present so AWDL data cannot overwrite the active Wi-Fi interface.
+- Parse SSID, BSSID, interface name, channel, RSSI, noise, CCA, Tx rate, security, PHY mode, MCS index, guard interval, NSS, country code, IPv4 address, and IPv4 router.
+- Preserve SSIDs with spaces.
+- Require an active sudo credential cache. Users should run `sudo -v` before local or combined macOS testing, or run the tracker with sudo.
+- Do not use a weak non-sudo macOS fallback for the primary path because it does not provide equivalent RF detail.
+- Keep the `airport -I` parser as parser coverage/compatibility code, but do not make it the primary macOS telemetry path.
 - Detect BSSID changes and play an optional alert.
-- If `airport` is missing or fails, show a clear local telemetry error without stopping infra tracking.
+- If `wdutil` cannot run through sudo, show a clear local telemetry error without stopping infra tracking in combined mode.
+
+macOS SSID/BSSID identity helper:
+
+- `wdutil` can return `<redacted>` for SSID and BSSID even with sudo on modern macOS.
+- Add a repo-owned Swift helper at `macos/WifiIdentityHelper`.
+- Build and install the helper with `scripts/build-macos-wifi-identity-helper.sh`.
+- Install path is `~/Applications/client-tracker-wifi-identity.app/Contents/MacOS/client-tracker-wifi-identity`.
+- The helper uses CoreLocation and CoreWLAN to request Location Services permission and print JSON with `interface`, `ssid`, `bssid`, and `authorization`.
+- ClientTracker auto-detects this helper when `local.identity_helper_path` is blank and the default app is installed.
+- The app launches the default helper through LaunchServices with `open -W -n <app> --args --output <tempfile>` so macOS grants Location Services permission to the app bundle.
+- If ClientTracker is running with sudo, it launches the helper as `SUDO_USER` and hands off a temp output file owned by that user.
+- Explicit custom helper paths remain supported for advanced use, must be absolute, and are executed without a shell.
 
 Windows local telemetry:
 
@@ -194,7 +230,10 @@ ap:
 local:
   ping_host: "8.8.8.8"
   sound_alerts: true
+  identity_helper_path: ""
 ```
+
+When `local.identity_helper_path` is blank, macOS local telemetry auto-detects the repo-owned helper at the default install path. Set it only to override the helper path explicitly.
 
 Credential env var overrides:
 
@@ -230,6 +269,13 @@ Columns:
 - local_channel
 - local_signal
 - local_noise
+- local_cca
+- local_security
+- local_phy_mode
+- local_mcs_index
+- local_nss
+- local_ipv4_address
+- local_ipv4_router
 - event_source
 - event_type
 - event_message
@@ -244,6 +290,8 @@ The logger will create the file with a header if it does not exist and append ro
 - Local polling failure shows in the Local Client Stats panel and adds an event, but does not stop infra polling in combined mode.
 - Missing `config.yaml` exits only for modes that require infrastructure credentials.
 - Unsupported local platform exits in `local` mode and degrades gracefully in `combined` mode.
+- Missing macOS identity helper does not stop polling; SSID/BSSID remain whatever `wdutil` reported.
+- macOS identity helper failures are surfaced as local polling errors when enrichment is required.
 - Ctrl+C closes AP sessions, disconnects WLC, stops background workers, flushes CSV output, and prints a concise shutdown message.
 
 ## Testing Strategy
@@ -253,7 +301,12 @@ Unit tests:
 - MAC normalization and validation.
 - WLC client detail parser.
 - AP `show dot11 clients` parser, including multi-word SSIDs.
-- macOS `airport -I` parser, including multi-word SSIDs.
+- macOS `wdutil info` parser, including multi-word SSIDs, WIFI-section scoping, RF fields, IP fields, and AWDL isolation.
+- macOS SSID/BSSID helper JSON parser.
+- macOS default helper auto-detection.
+- macOS sudo-to-original-user helper launch behavior.
+- macOS explicit custom helper path validation.
+- macOS `airport -I` parser compatibility coverage, including multi-word SSIDs.
 - Windows `netsh wlan show interfaces` parser, including multi-word SSIDs.
 - Event generation for AP changes, BSSID changes, disassociation, and recovery.
 - CSV row formatting.
@@ -262,12 +315,15 @@ Smoke checks:
 
 - `python -m py_compile` for all modules.
 - `python client_tracker.py --check` without hardware validates local dependencies and reports missing external access clearly.
+- `scripts/build-macos-wifi-identity-helper.sh` builds and ad-hoc signs the macOS helper.
+- Launching `~/Applications/client-tracker-wifi-identity.app` returns JSON with Location Services authorization status, interface, SSID, and BSSID.
 
 Manual validation:
 
 - `--mode local` on macOS client.
 - `--mode infra` from a management machine with WLC/AP reachability.
 - `--mode combined` from the wireless client while roaming between APs.
+- macOS helper first-run Location Services approval.
 
 ## Implementation Sequence
 
@@ -278,7 +334,8 @@ Manual validation:
 5. Extend Rich display with Local Client Stats and Event Timeline panels.
 6. Add event timeline and CSV logger.
 7. Add tests for parsers, event detection, and logging.
-8. Update README with modes, setup, config hygiene, and examples.
+8. Replace third-party macOS SSID/BSSID helper dependency with repo-owned Swift helper and auto-detection.
+9. Update README with modes, setup, config hygiene, and examples.
 
 ## Decisions
 
