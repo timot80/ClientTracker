@@ -50,12 +50,19 @@ Behavior:
 - `--refresh` overrides the config refresh interval.
 - `--once` prints one snapshot and exits.
 - `--only-imbalanced` hides APs that are currently balanced.
-- `--only-problem` shows `IMBALANCED`, `BUSY-IDLE`, `WARNING`, and `NO DATA` rows.
+- `--only-problem` shows `IMBALANCED`, `BUSY-IDLE`, `WARNING`, and `INSUFFICIENT_DATA` rows. `INSUFFICIENT_DATA` displays as `NO DATA`.
 - `--show-idle` includes all `IDLE` rows.
 - `--hide-idle` hides clean `IDLE` rows but still shows `BUSY-IDLE`.
 - `--limit` caps displayed AP rows after priority sorting.
 - `--busy-idle-util` sets the utilization threshold for zero-client APs to become `BUSY-IDLE`.
 - `--config` allows alternate config files for different WLCs or AP groups.
+
+Conflicts:
+
+- CLI options override config values.
+- `--only-imbalanced` and `--only-problem` are mutually exclusive.
+- `--show-idle` and `--hide-idle` are mutually exclusive.
+- Internally, visibility is normalized to one mode: `all`, `hide_idle`, `only_problem`, or `only_imbalanced`.
 
 ## Configuration
 
@@ -208,6 +215,8 @@ Zero-client APs:
 
 `BUSY-IDLE` means the AP/radio is seeing channel activity while no clients are associated. It is not a definitive radio failure; it is an operational signal worth keeping visible.
 
+Unknown utilization values are ignored for `BUSY-IDLE` threshold comparison. If a zero-client AP has numeric client values but all active utilization values are unknown, classify it as `IDLE` with reason `utilization unknown`.
+
 When `include_zero_client_slots` is true, active zero-client slots are included in spread calculations. Ratio calculations use the smallest nonzero client count to avoid divide-by-zero, and `0 vs N` is represented through spread and reason text.
 
 When `include_zero_client_slots` is false, zero-client slots are ignored for both spread and ratio.
@@ -238,7 +247,7 @@ Examples:
 - `0, 0, 0` with utilization `43, 31, 8`: `BUSY-IDLE`.
 - `7, NA, NA`: insufficient data because fewer than two comparable slots remain.
 
-Sorting severity order is `IMBALANCED`, `BUSY-IDLE`, `WARNING`, `OK`, `IDLE`, `INSUFFICIENT_DATA`. Within a severity, sort by spread descending, then ratio descending, treating `None` ratio as lower than any numeric ratio. `BUSY-IDLE` rows sort by highest slot utilization.
+Sorting severity order is `IMBALANCED`, `BUSY-IDLE`, `WARNING`, `INSUFFICIENT_DATA`, `OK`, `IDLE`. Within a severity, sort by spread descending, then ratio descending, treating `None` ratio as lower than any numeric ratio. `BUSY-IDLE` rows sort by highest slot utilization. `INSUFFICIENT_DATA` displays as `NO DATA` and sorts before clean `OK` and `IDLE` rows because it may indicate a parsing, telemetry, or AP-reporting issue.
 
 Default large-list behavior:
 
@@ -247,10 +256,21 @@ Default large-list behavior:
 - Sort by the severity order above.
 - Display up to `limit` AP rows by default.
 - Always prioritize problem states before clean `IDLE` rows.
-- If `show_idle` is true, include idle APs in sorted order until the limit is reached.
-- If `hide_idle` is true, omit `IDLE` rows but keep `BUSY-IDLE`.
+- Default visibility mode is `all`: include `IDLE` rows after higher-priority rows until the limit is reached.
+- If `show_idle` is true, force visibility mode `all`; this is mainly useful to override config-level `hide_idle`.
+- If `hide_idle` is true, use visibility mode `hide_idle`: omit `IDLE` rows but keep `BUSY-IDLE`.
 - If `only_problem` is true, show only `IMBALANCED`, `BUSY-IDLE`, `WARNING`, and `INSUFFICIENT_DATA`.
 - If `only_imbalanced` is true, preserve the existing behavior and show only `IMBALANCED`.
+
+Display pipeline:
+
+1. `raw`: every AP parsed from WLC output.
+2. `eligible`: APs remaining after name and slot filters.
+3. `scored`: eligible APs with balance status.
+4. `visible`: scored APs remaining after visibility mode filters.
+5. `displayed`: first `limit` rows after priority sorting.
+6. `hidden_by_visibility`: scored rows removed by `hide_idle`, `only_problem`, or `only_imbalanced`.
+7. `hidden_by_limit`: visible rows not displayed because of `limit`.
 
 ## Terminal Display
 
@@ -282,7 +302,7 @@ Visual rules:
 - `INSUFFICIENT_DATA` rows use dim status.
 - The table does not expand to fill very wide terminals.
 - The title shows total AP count, displayed AP count, and last poll time.
-- If rows are hidden by `limit` or filters, show a summary footer with hidden counts by status.
+- If rows are hidden, show a summary footer with separate counts for rows hidden by visibility mode and rows hidden by limit, grouped by status.
 
 ## Error Handling
 
