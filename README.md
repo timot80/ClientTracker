@@ -272,6 +272,30 @@ The percentage is radio/channel utilization from the WLC. It is not the
 percentage of clients on that radio. Client distribution scoring is based on
 client counts, while utilization is shown as RF context.
 
+### AP Ethernet Port Audit
+
+Audit AP uplink speed and duplex from a Catalyst 9800 WLC:
+
+```bash
+wifiops c9800 ap-ports --config config.yaml
+wifiops c9800 ap-ports --include "MBY-*"
+wifiops c9800 ap-ports --all
+wifiops c9800 ap-ports --speed-threshold 2500
+```
+
+By default, the audit shows only ports with issues. Add optional defaults to
+`config.yaml` when the same filters or threshold should apply every run:
+
+```yaml
+ap_ports:
+  include:
+    - "NOC-*"
+  exclude:
+    - "*-TEST"
+  show_all: false
+  speed_threshold: 1000
+```
+
 ## Example Output
 
 ```
