@@ -88,7 +88,7 @@ def build_monitor_table(snapshot: LoadInfoSnapshot, config: APBalanceConfig) -> 
         )
 
     last_poll = snapshot.timestamp.strftime("%H:%M:%S")
-    title = f"AP Radio Distribution Monitor | {len(aps)} APs | Last poll {last_poll}"
+    title = f"Last {last_poll} | {len(aps)} APs | AP Radio"
     return Panel(table, title=title, border_style="cyan")
 
 

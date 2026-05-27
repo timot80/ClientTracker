@@ -74,7 +74,20 @@ def test_build_monitor_table_shows_last_polled_time_in_title():
     console.print(build_monitor_table(snapshot, APBalanceConfig()))
     rendered = console.export_text()
 
-    assert "Last poll 14:03:09" in rendered
+    assert "Last 14:03:09" in rendered
+
+
+def test_build_monitor_table_keeps_last_poll_visible_in_narrow_title():
+    snapshot = LoadInfoSnapshot(
+        ap_loads=[make_ap("NOC-AP-MBY-1", [2, 2, 1, None])],
+        timestamp=datetime(2026, 5, 27, 14, 3, 9),
+    )
+    console = Console(record=True, width=50)
+
+    console.print(build_monitor_table(snapshot, APBalanceConfig()))
+    first_line = console.export_text().splitlines()[0]
+
+    assert "Last 14:03:09" in first_line
 
 
 def test_build_monitor_table_renders_parser_warning_and_poll_error():
