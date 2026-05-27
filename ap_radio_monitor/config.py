@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from ap_radio_monitor.models import APBalanceConfig, AppConfig, WLCConfig
+from wifiops.credentials import CredentialConfigError, resolve_credentials
+
+
+WLC_CREDENTIAL_ENV = {
+    "username": "CLIENT_TRACKER_WLC_USERNAME",
+    "password": "CLIENT_TRACKER_WLC_PASSWORD",
+    "enable": "CLIENT_TRACKER_WLC_ENABLE",
+}
 
 
 def load_config(path: str | Path) -> AppConfig:
@@ -23,11 +32,21 @@ def load_config(path: str | Path) -> AppConfig:
     if not isinstance(wlc_raw, dict):
         raise ValueError("wlc must be a mapping")
 
+    try:
+        wlc_credentials = resolve_credentials(raw, "wlc", os.environ, WLC_CREDENTIAL_ENV)
+    except CredentialConfigError as exc:
+        raise ValueError(str(exc)) from exc
+
+    host = (
+        os.environ["CLIENT_TRACKER_WLC_HOST"]
+        if "CLIENT_TRACKER_WLC_HOST" in os.environ
+        else _required_str(wlc_raw, "wlc.host")
+    )
     wlc = WLCConfig(
-        host=_required_str(wlc_raw, "wlc.host"),
-        username=_required_str(wlc_raw, "wlc.username"),
-        password=_required_str(wlc_raw, "wlc.password"),
-        enable=str(wlc_raw.get("enable", "") or ""),
+        host=_required_value(host, "wlc.host"),
+        username=_required_value(wlc_credentials.username, "wlc.username"),
+        password=_required_value(wlc_credentials.password, "wlc.password"),
+        enable=wlc_credentials.enable,
         read_timeout=int(wlc_raw.get("read_timeout", 90)),
     )
 
@@ -49,6 +68,8 @@ def load_config(path: str | Path) -> AppConfig:
         show_idle=bool(ap_raw.get("show_idle", False)),
         hide_idle=bool(ap_raw.get("hide_idle", False)),
         limit=int(ap_raw.get("limit", 75)),
+        display_columns=int(ap_raw.get("display_columns", 1)),
+        auto_exclude_admin_down_slots=bool(ap_raw.get("auto_exclude_admin_down_slots", False)),
         min_total_clients=int(ap_raw.get("min_total_clients", 1)),
         busy_idle_utilization=int(ap_raw.get("busy_idle_utilization", 20)),
         ratio_threshold=float(imbalance.get("ratio_threshold", 10)),
@@ -62,6 +83,12 @@ def _required_str(mapping: dict[str, Any], name: str) -> str:
     key = name.split(".")[-1]
     value = mapping.get(key)
     if value is None or str(value).strip() == "":
+        raise ValueError(f"Missing required config value: {name}")
+    return str(value)
+
+
+def _required_value(value: str, name: str) -> str:
+    if str(value).strip() == "":
         raise ValueError(f"Missing required config value: {name}")
     return str(value)
 

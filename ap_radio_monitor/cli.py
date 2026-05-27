@@ -37,6 +37,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     idle.add_argument("--show-idle", action="store_true", default=None, help="Show clean idle APs")
     idle.add_argument("--hide-idle", action="store_true", default=None, help="Hide clean idle APs")
     parser.add_argument("--limit", type=int, help="Maximum AP rows to display")
+    parser.add_argument("--columns", type=int, choices=(1, 2), help="AP row groups to display")
+    parser.add_argument(
+        "--auto-exclude-admin-down-slots",
+        action="store_true",
+        default=None,
+        help="Query AP slot config and ignore admin-disabled/down 0-client slots",
+    )
+    parser.add_argument(
+        "--include-slot",
+        type=int,
+        action="append",
+        default=None,
+        help="Radio slot to show and score; may be repeated",
+    )
+    parser.add_argument(
+        "--exclude-slot",
+        type=int,
+        action="append",
+        default=None,
+        help="Radio slot to hide and ignore; may be repeated",
+    )
     parser.add_argument(
         "--busy-idle-util",
         type=int,
@@ -61,6 +82,10 @@ def main(argv: list[str] | None = None) -> int:
         show_idle=args.show_idle,
         hide_idle=args.hide_idle,
         limit=args.limit,
+        display_columns=args.columns,
+        auto_exclude_admin_down_slots=args.auto_exclude_admin_down_slots,
+        included_slots=args.include_slot,
+        excluded_slots=args.exclude_slot,
         busy_idle_utilization=args.busy_idle_util,
     )
 
@@ -90,19 +115,29 @@ def _override_balance_config(
     show_idle: bool | None,
     hide_idle: bool | None,
     limit: int | None,
+    display_columns: int | None,
+    auto_exclude_admin_down_slots: bool | None,
+    included_slots: list[int] | None,
+    excluded_slots: list[int] | None,
     busy_idle_utilization: int | None,
 ) -> APBalanceConfig:
     return APBalanceConfig(
         refresh_seconds=refresh if refresh is not None else config.refresh_seconds,
         include=config.include,
         exclude=config.exclude,
-        included_slots=config.included_slots,
-        excluded_slots=config.excluded_slots,
+        included_slots=tuple(included_slots) if included_slots is not None else config.included_slots,
+        excluded_slots=tuple(excluded_slots) if excluded_slots is not None else config.excluded_slots,
         only_imbalanced=config.only_imbalanced if only_imbalanced is None else only_imbalanced,
         only_problem=config.only_problem if only_problem is None else only_problem,
         show_idle=config.show_idle if show_idle is None else show_idle,
         hide_idle=config.hide_idle if hide_idle is None else hide_idle,
         limit=limit if limit is not None else config.limit,
+        display_columns=display_columns if display_columns is not None else config.display_columns,
+        auto_exclude_admin_down_slots=(
+            config.auto_exclude_admin_down_slots
+            if auto_exclude_admin_down_slots is None
+            else auto_exclude_admin_down_slots
+        ),
         min_total_clients=config.min_total_clients,
         busy_idle_utilization=(
             busy_idle_utilization

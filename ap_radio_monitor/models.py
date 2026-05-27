@@ -26,6 +26,8 @@ class APBalanceConfig:
     show_idle: bool = False
     hide_idle: bool = False
     limit: int = 75
+    display_columns: int = 1
+    auto_exclude_admin_down_slots: bool = False
     min_total_clients: int = 1
     busy_idle_utilization: int = 20
     ratio_threshold: float = 10.0

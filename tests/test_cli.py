@@ -21,8 +21,15 @@ def test_parse_args_supports_monitor_options():
             "--only-imbalanced",
             "--limit",
             "10",
+            "--columns",
+            "2",
+            "--auto-exclude-admin-down-slots",
             "--busy-idle-util",
             "25",
+            "--include-slot",
+            "1",
+            "--exclude-slot",
+            "0",
         ]
     )
 
@@ -31,7 +38,11 @@ def test_parse_args_supports_monitor_options():
     assert args.once is True
     assert args.only_imbalanced is True
     assert args.limit == 10
+    assert args.columns == 2
+    assert args.auto_exclude_admin_down_slots is True
     assert args.busy_idle_util == 25
+    assert args.include_slot == [1]
+    assert args.exclude_slot == [0]
 
 
 def test_parse_args_rejects_conflicting_radio_visibility_options():

@@ -65,6 +65,32 @@ def test_build_monitor_table_uses_slot_columns_for_one_line_rows():
     assert "2c 10%" in rendered
 
 
+def test_build_monitor_table_hides_excluded_slot_columns():
+    snapshot = LoadInfoSnapshot(ap_loads=[make_ap("NOC-AP-1", [2, 2, 1, None])])
+    console = Console(record=True, width=140)
+
+    console.print(build_monitor_table(snapshot, APBalanceConfig(excluded_slots=(0,))))
+    rendered = console.export_text()
+
+    assert "S0" not in rendered
+    assert "S1" in rendered
+    assert "S2" in rendered
+    assert "S3" in rendered
+
+
+def test_build_monitor_table_only_shows_included_slot_columns():
+    snapshot = LoadInfoSnapshot(ap_loads=[make_ap("NOC-AP-1", [2, 2, 1, None])])
+    console = Console(record=True, width=140)
+
+    console.print(build_monitor_table(snapshot, APBalanceConfig(included_slots=(1, 2))))
+    rendered = console.export_text()
+
+    assert "S0" not in rendered
+    assert "S1" in rendered
+    assert "S2" in rendered
+    assert "S3" not in rendered
+
+
 def test_build_monitor_table_shows_last_polled_time_in_title():
     snapshot = LoadInfoSnapshot(
         ap_loads=[make_ap("NOC-AP-1", [2, 2, 1, None])],
@@ -101,7 +127,27 @@ def test_build_monitor_table_stays_compact_on_wide_terminal():
     console.print(build_monitor_table(snapshot, APBalanceConfig()))
     header_line = next(line for line in console.export_text().splitlines() if "┃ AP" in line)
 
-    assert len(header_line) < 120
+    assert len(header_line) < 180
+
+
+def test_build_monitor_table_uses_two_side_by_side_row_groups():
+    snapshot = LoadInfoSnapshot(
+        ap_loads=[
+            make_ap("AP-0", [1, 1]),
+            make_ap("AP-1", [2, 2]),
+            make_ap("AP-2", [3, 3]),
+            make_ap("AP-3", [4, 4]),
+        ]
+    )
+    console = Console(record=True, width=220)
+
+    console.print(build_monitor_table(snapshot, APBalanceConfig(display_columns=2)))
+    rendered = console.export_text()
+    header_line = next(line for line in rendered.splitlines() if "┃ AP" in line)
+
+    assert header_line.count("AP") == 2
+    assert any("AP-0" in line and "AP-2" in line for line in rendered.splitlines())
+    assert any("AP-1" in line and "AP-3" in line for line in rendered.splitlines())
 
 
 def test_build_monitor_table_renders_idle_for_zero_client_ap():

@@ -1,0 +1,24 @@
+wlc:
+  host: "NOC-MBY-SSO-1"
+  username: "YOUR_USER"
+  password: ""
+  enable: ""
+  read_timeout: 90
+
+ap_balance:
+  refresh_seconds: 30
+  limit: 75
+  display_columns: 1
+  auto_exclude_admin_down_slots: false
+  include: []
+  exclude: []
+  included_slots: []
+  excluded_slots: []
+  only_imbalanced: false
+  only_problem: false
+  hide_idle: false
+  busy_idle_utilization: 20
+  imbalance:
+    ratio_threshold: 10
+    min_difference: 20
+    include_zero_client_slots: true

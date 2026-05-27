@@ -17,6 +17,8 @@ def parse_load_info(output: str) -> LoadInfoSnapshot:
     """Parse `show ap summary load-info` output from a Catalyst 9800 WLC."""
     header = _detect_header(output)
     if header is None:
+        if _is_empty_load_info_output(output):
+            return LoadInfoSnapshot()
         raise LoadInfoParseError("Could not find supported load-info header")
 
     mode, slot_numbers = header
@@ -59,6 +61,11 @@ def _detect_header(output: str) -> tuple[str, list[int]] | None:
         if "wtp-mac" in normalized and "ap-name" in normalized:
             return "documented", slot_numbers
     return None
+
+
+def _is_empty_load_info_output(output: str) -> bool:
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    return bool(lines) and all(_is_ignored_line(line) for line in lines)
 
 
 def _is_header_line(line: str) -> bool:

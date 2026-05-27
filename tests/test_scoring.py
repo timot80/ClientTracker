@@ -58,6 +58,24 @@ def test_score_returns_busy_idle_for_zero_clients_with_high_utilization():
     assert score.reason == "zero clients with busy channel"
 
 
+def test_score_ignores_excluded_slots_for_busy_idle():
+    score = score_ap(
+        make_ap("IDLE", [0, 0, 0], utilizations=[43, 0, 0]),
+        APBalanceConfig(excluded_slots=(0,), busy_idle_utilization=20),
+    )
+
+    assert score.status == "IDLE"
+
+
+def test_score_uses_included_slots_for_busy_idle():
+    score = score_ap(
+        make_ap("IDLE", [0, 0, 0], utilizations=[43, 0, 0]),
+        APBalanceConfig(included_slots=(1, 2), busy_idle_utilization=20),
+    )
+
+    assert score.status == "IDLE"
+
+
 def test_score_ignores_unknown_utilization_for_busy_idle():
     score = score_ap(
         make_ap("IDLE", [0, 0, None], utilizations=[None, None, None]),

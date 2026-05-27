@@ -33,19 +33,28 @@ Copy the tracked example file and edit the local copy:
 cp config.example.yaml config.yaml
 ```
 
-`config.yaml` is ignored by Git and is where local WLC/AP credentials can be stored:
+`config.yaml` is ignored by Git. The preferred workflow is to store shared
+infrastructure secrets in the OS keyring and keep only profile references in
+`config.yaml`:
+
+```bash
+wifiops credentials set-profile c9800-admin --username netops-admin
+```
 
 ```yaml
+credentials:
+  profiles:
+    c9800-admin:
+      username: "netops-admin"
+      password_keyring: "wifiops:profile:c9800-admin:password"
+      enable_keyring: "wifiops:profile:c9800-admin:enable"
+
 wlc:
   host: "192.0.2.10"
-  username: "admin"
-  password: "changeme"
-  enable: "changeme"
+  credential_profile: "c9800-admin"
 
 ap:
-  username: "admin"
-  password: "changeme"
-  enable: "changeme"
+  credential_profile: "c9800-admin"
 
 local:
   ping_host: "8.8.8.8"
@@ -59,6 +68,8 @@ ap_balance:
   included_slots: []
   excluded_slots: []
   only_imbalanced: false
+  display_columns: 1
+  auto_exclude_admin_down_slots: false
   min_total_clients: 1
   imbalance:
     ratio_threshold: 10
@@ -66,7 +77,9 @@ ap_balance:
     include_zero_client_slots: true
 ```
 
-Secrets are loaded from local `config.yaml` or environment variables. `config.yaml` is ignored by Git and should not be committed.
+Plaintext `username`, `password`, and `enable` values in `wlc` and `ap`
+sections still work for local-only compatibility. Secrets can also be loaded
+from explicit `password_keyring` and `enable_keyring` references.
 
 Environment variables override file values:
 
@@ -77,6 +90,18 @@ Environment variables override file values:
 - `CLIENT_TRACKER_AP_USERNAME`
 - `CLIENT_TRACKER_AP_PASSWORD`
 - `CLIENT_TRACKER_AP_ENABLE`
+
+Credential profiles are managed from the `wifiops` entrypoint:
+
+```bash
+wifiops credentials show-profiles
+wifiops credentials delete-profile c9800-admin
+```
+
+`show-profiles` reads the YAML profile index and does not enumerate the OS
+keyring. `delete-profile` removes the YAML profile and known keyring entries,
+but it does not rewrite `wlc.credential_profile` or `ap.credential_profile`
+references.
 
 ### macOS SSID/BSSID helper
 
@@ -181,7 +206,8 @@ python client_tracker.py aabbccddeeff
 ## Platform Notes
 
 - Infrastructure tracking works on any platform that can run Python and reach the WLC/APs over SSH.
-- Local telemetry on macOS uses `sudo -n wdutil info` by default and requires an active sudo credential cache. Run `sudo -v` before starting, or run the tracker with sudo.
+- Local telemetry on macOS uses `sudo -n wdutil info` by default and requires an active sudo credential cache. Run `sudo -v` before starting, then run `wifiops client local`.
+- Avoid running infrastructure commands under sudo when using keyring profiles. Keyring lookups may use root's keyring instead of the profile stored for your normal user.
 - Local telemetry supports Windows through `netsh wlan show interfaces`.
 - Linux local telemetry is not implemented in this version; Linux can still run infrastructure mode.
 
@@ -210,6 +236,9 @@ python ap_radio_monitor.py --once
 python ap_radio_monitor.py --refresh 30
 python ap_radio_monitor.py --only-imbalanced
 python ap_radio_monitor.py --config config.yaml
+python ap_radio_monitor.py --columns 2
+python ap_radio_monitor.py --auto-exclude-admin-down-slots
+wifiops c9800 radio --auto-exclude-admin-down-slots
 ```
 
 Add optional AP radio monitor settings to `config.yaml`:
@@ -224,6 +253,8 @@ ap_balance:
   included_slots: []
   excluded_slots: []
   only_imbalanced: false
+  display_columns: 1
+  auto_exclude_admin_down_slots: false
   min_total_clients: 1
   imbalance:
     ratio_threshold: 10

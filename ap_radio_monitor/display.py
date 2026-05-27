@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from rich.panel import Panel
 from rich.table import Table
+from rich.text import Text
 
 from ap_radio_monitor.models import APBalanceConfig, APLoad, BalanceScore, LoadInfoSnapshot
 from ap_radio_monitor.scoring import filter_aps, score_ap, sort_rows
@@ -45,13 +46,12 @@ def render_slot_cell(ap: APLoad, slot_number: int, width: int = 4) -> str:
 def build_monitor_table(snapshot: LoadInfoSnapshot, config: APBalanceConfig) -> Panel:
     """Build the Rich renderable for one monitor snapshot."""
     table = Table(expand=False)
-    table.add_column("AP", no_wrap=True)
-    table.add_column("Cli", justify="right", no_wrap=True)
-    table.add_column("S0", no_wrap=True)
-    table.add_column("S1", no_wrap=True)
-    table.add_column("S2", no_wrap=True)
-    table.add_column("S3", no_wrap=True)
-    table.add_column("Balance", justify="right", no_wrap=True)
+    visible_slots = _visible_slot_numbers(config)
+    display_columns = max(1, min(config.display_columns, 2))
+    _add_ap_columns(table, visible_slots)
+    if display_columns == 2:
+        table.add_column("", no_wrap=True)
+        _add_ap_columns(table, visible_slots)
 
     aps = filter_aps(snapshot.ap_loads, config)
     rows = [(ap, score_ap(ap, config)) for ap in aps]
@@ -60,43 +60,109 @@ def build_monitor_table(snapshot: LoadInfoSnapshot, config: APBalanceConfig) -> 
     displayed_rows = sorted_rows[: config.limit]
     hidden_by_limit = sorted_rows[config.limit :]
 
-    for ap, score in displayed_rows:
-        style = STATUS_STYLES.get(score.status, "")
-        table.add_row(
-            ap.name,
-            str(ap.total_clients),
-            render_slot_cell(ap, 0),
-            render_slot_cell(ap, 1),
-            render_slot_cell(ap, 2),
-            render_slot_cell(ap, 3),
-            _balance_text(score),
-            style=style,
-        )
+    if display_columns == 2:
+        left_rows, right_rows = _split_display_rows(displayed_rows)
+        empty_cells = [""] * _ap_column_count(visible_slots)
+        for index, left in enumerate(left_rows):
+            right = right_rows[index] if index < len(right_rows) else None
+            left_cells = _ap_row_cells(left[0], left[1], visible_slots)
+            right_cells = _ap_row_cells(right[0], right[1], visible_slots) if right else empty_cells
+            table.add_row(*left_cells, "", *right_cells)
+    else:
+        for ap, score in displayed_rows:
+            table.add_row(*_ap_row_cells(ap, score, visible_slots))
 
     hidden_lines = _hidden_summary_lines(hidden_by_visibility, hidden_by_limit)
     if snapshot.poll_error or snapshot.parser_warnings or hidden_lines:
         table.add_section()
     for line in hidden_lines:
-        table.add_row("Summary", "", line, "", "", "", "", style="dim")
+        table.add_row(*_metadata_cells("Summary", line, visible_slots, display_columns), style="dim")
     if snapshot.poll_error:
-        table.add_row("Poll Error", "", snapshot.poll_error, "", "", "", "", style="red")
+        table.add_row(
+            *_metadata_cells("Poll Error", snapshot.poll_error, visible_slots, display_columns),
+            style="red",
+        )
     for warning in snapshot.parser_warnings[:3]:
-        table.add_row("Warning", "", warning, "", "", "", "", style="yellow")
+        table.add_row(
+            *_metadata_cells("Warning", warning, visible_slots, display_columns),
+            style="yellow",
+        )
     if len(snapshot.parser_warnings) > 3:
         table.add_row(
-            "Warning",
-            "",
-            f"{len(snapshot.parser_warnings) - 3} additional parser warnings hidden",
-            "",
-            "",
-            "",
-            "",
+            *_metadata_cells(
+                "Warning",
+                f"{len(snapshot.parser_warnings) - 3} additional parser warnings hidden",
+                visible_slots,
+                display_columns,
+            ),
             style="yellow",
         )
 
     last_poll = snapshot.timestamp.strftime("%H:%M:%S")
     title = f"Last {last_poll} | {len(aps)} APs | Showing {len(displayed_rows)}/{len(aps)} | AP Radio"
     return Panel(table, title=title, border_style="cyan", expand=False)
+
+
+def _add_ap_columns(table: Table, visible_slots: list[int]) -> None:
+    table.add_column("AP", no_wrap=True)
+    table.add_column("Cli", justify="right", no_wrap=True)
+    for slot_number in visible_slots:
+        table.add_column(f"S{slot_number}", no_wrap=True)
+    table.add_column("Balance", justify="right", no_wrap=True)
+
+
+def _split_display_rows(
+    rows: list[tuple[APLoad, BalanceScore]],
+) -> tuple[list[tuple[APLoad, BalanceScore]], list[tuple[APLoad, BalanceScore]]]:
+    midpoint = (len(rows) + 1) // 2
+    return rows[:midpoint], rows[midpoint:]
+
+
+def _ap_column_count(visible_slots: list[int]) -> int:
+    return len(visible_slots) + 3
+
+
+def _ap_row_cells(ap: APLoad, score: BalanceScore, visible_slots: list[int]) -> list[Text]:
+    style = STATUS_STYLES.get(score.status, "")
+    values = [
+        ap.name,
+        str(ap.total_clients),
+        *(render_slot_cell(ap, slot_number) for slot_number in visible_slots),
+        _balance_text(score),
+    ]
+    return [Text(value, style=style) for value in values]
+
+
+def _visible_slot_numbers(config: APBalanceConfig) -> list[int]:
+    if config.included_slots:
+        slot_numbers = sorted(set(config.included_slots))
+    else:
+        slot_numbers = [0, 1, 2, 3]
+    excluded_slots = set(config.excluded_slots)
+    return [slot_number for slot_number in slot_numbers if slot_number not in excluded_slots]
+
+
+def _metadata_row(label: str, message: str, visible_slots: list[int]) -> list[str]:
+    if not visible_slots:
+        return [label, "", message]
+    return [label, "", message, *([""] * (len(visible_slots) - 1)), ""]
+
+
+def _wide_metadata_row(label: str, message: str, visible_slots: list[int]) -> list[str]:
+    left = _metadata_row(label, message, visible_slots)
+    right = [""] * _ap_column_count(visible_slots)
+    return [*left, "", *right]
+
+
+def _metadata_cells(
+    label: str,
+    message: str,
+    visible_slots: list[int],
+    display_columns: int,
+) -> list[str]:
+    if display_columns == 2:
+        return _wide_metadata_row(label, message, visible_slots)
+    return _metadata_row(label, message, visible_slots)
 
 
 def _bar(clients: int, max_clients: int, width: int) -> str:

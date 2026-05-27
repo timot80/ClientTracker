@@ -87,6 +87,18 @@ MBY-CON-SCC1_BAYSIDE_A-32         1cfc.1792.82c0   3              0        0    
     assert snapshot.parser_warnings == []
 
 
+def test_parse_empty_load_info_preamble_as_zero_aps():
+    output = """
+Load for five secs: 1%/0%; one minute: 3%; five minutes: 4%
+Time source is NTP, 13:07:50.060 PDT Wed May 27 2026
+"""
+
+    snapshot = parse_load_info(output)
+
+    assert snapshot.ap_loads == []
+    assert snapshot.parser_warnings == []
+
+
 def test_parse_skips_malformed_rows_but_keeps_valid_rows():
     output = OBSERVED_OUTPUT + "\nthis row is not valid\n"
     snapshot = parse_load_info(output)

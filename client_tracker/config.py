@@ -8,6 +8,8 @@ from typing import Any
 
 import yaml
 
+from wifiops.credentials import CredentialConfigError, ResolvedCredentials, resolve_credentials
+
 
 @dataclass
 class WLCConfig:
@@ -48,6 +50,18 @@ ENV_OVERRIDES = {
     ("ap", "enable"): "CLIENT_TRACKER_AP_ENABLE",
 }
 
+WLC_CREDENTIAL_ENV = {
+    "username": "CLIENT_TRACKER_WLC_USERNAME",
+    "password": "CLIENT_TRACKER_WLC_PASSWORD",
+    "enable": "CLIENT_TRACKER_WLC_ENABLE",
+}
+
+AP_CREDENTIAL_ENV = {
+    "username": "CLIENT_TRACKER_AP_USERNAME",
+    "password": "CLIENT_TRACKER_AP_PASSWORD",
+    "enable": "CLIENT_TRACKER_AP_ENABLE",
+}
+
 
 def load_config(path: str | Path, require_infra: bool) -> AppConfig:
     path = Path(path)
@@ -61,24 +75,33 @@ def load_config(path: str | Path, require_infra: bool) -> AppConfig:
     elif require_infra:
         sys.exit(f"Config file not found: {path}")
 
-    for (section, key), env_name in ENV_OVERRIDES.items():
-        if env_name in os.environ:
-            data.setdefault(section, {})[key] = os.environ[env_name]
+    if "CLIENT_TRACKER_WLC_HOST" in os.environ:
+        data.setdefault("wlc", {})["host"] = os.environ["CLIENT_TRACKER_WLC_HOST"]
 
     wlc_data = data.get("wlc", {}) or {}
     ap_data = data.get("ap", {}) or {}
     local_data = data.get("local", {}) or {}
+    if require_infra:
+        try:
+            wlc_credentials = resolve_credentials(data, "wlc", os.environ, WLC_CREDENTIAL_ENV)
+            ap_credentials = resolve_credentials(data, "ap", os.environ, AP_CREDENTIAL_ENV)
+        except CredentialConfigError as exc:
+            sys.exit(str(exc))
+    else:
+        wlc_credentials = ResolvedCredentials()
+        ap_credentials = ResolvedCredentials()
+
     cfg = AppConfig(
         wlc=WLCConfig(
             host=str(wlc_data.get("host", "")),
-            username=str(wlc_data.get("username", "")),
-            password=str(wlc_data.get("password", "")),
-            enable=str(wlc_data.get("enable", "")),
+            username=wlc_credentials.username,
+            password=wlc_credentials.password,
+            enable=wlc_credentials.enable,
         ),
         ap=APConfig(
-            username=str(ap_data.get("username", "")),
-            password=str(ap_data.get("password", "")),
-            enable=str(ap_data.get("enable", "")),
+            username=ap_credentials.username,
+            password=ap_credentials.password,
+            enable=ap_credentials.enable,
         ),
         local=LocalConfig(
             ping_host=str(local_data.get("ping_host", "")),

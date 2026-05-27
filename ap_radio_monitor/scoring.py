@@ -93,15 +93,11 @@ def sort_rows(rows: list[tuple[APLoad, BalanceScore]]) -> list[tuple[APLoad, Bal
 
 
 def _comparable_clients(ap: APLoad, config: APBalanceConfig) -> list[int]:
-    included_slots = set(config.included_slots)
-    excluded_slots = set(config.excluded_slots)
     values = []
     for slot in ap.slot_loads:
         if slot.clients is None:
             continue
-        if included_slots and slot.slot not in included_slots:
-            continue
-        if slot.slot in excluded_slots:
+        if not _is_comparable_slot(slot, config):
             continue
         if slot.clients == 0 and not config.include_zero_client_slots:
             continue
@@ -109,11 +105,23 @@ def _comparable_clients(ap: APLoad, config: APBalanceConfig) -> list[int]:
     return values
 
 
+def _is_comparable_slot(slot, config: APBalanceConfig) -> bool:
+    included_slots = set(config.included_slots)
+    excluded_slots = set(config.excluded_slots)
+    if included_slots and slot.slot not in included_slots:
+        return False
+    if slot.slot in excluded_slots:
+        return False
+    return True
+
+
 def _zero_client_score(ap: APLoad, config: APBalanceConfig) -> BalanceScore:
     utilizations = [
         slot.utilization
         for slot in ap.slot_loads
-        if slot.clients == 0 and slot.utilization is not None
+        if _is_comparable_slot(slot, config)
+        and slot.clients == 0
+        and slot.utilization is not None
     ]
     if any(utilization >= config.busy_idle_utilization for utilization in utilizations):
         return BalanceScore(status="BUSY-IDLE", reason="zero clients with busy channel")

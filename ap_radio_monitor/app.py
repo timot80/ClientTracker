@@ -8,44 +8,78 @@ from rich.panel import Panel
 from rich.table import Table
 
 from ap_radio_monitor.display import build_monitor_table
-from ap_radio_monitor.models import APBalanceConfig, LoadInfoSnapshot, WLCConfig
+from ap_radio_monitor.models import APBalanceConfig, APLoad, LoadInfoSnapshot, RadioSlotLoad, WLCConfig
 from ap_radio_monitor.parser import LoadInfoParseError, parse_load_info
+from ap_radio_monitor.scoring import filter_aps
 from ap_radio_monitor.wlc import WLCLoadInfoSession
+
+
+class StartupReporter:
+    def __init__(self, console: Console):
+        self.console = console
+
+    def step(self, message: str) -> None:
+        self.console.print(f"[cyan]{message}[/cyan]")
 
 
 def collect_once(session, config: APBalanceConfig) -> LoadInfoSnapshot:
     """Collect and parse one load-info snapshot from an existing WLC-like session."""
-    del config
     output = session.get_load_info()
     try:
-        return parse_load_info(output)
+        snapshot = parse_load_info(output)
     except LoadInfoParseError as exc:
         excerpt = _output_excerpt(output)
         raise LoadInfoParseError(f"{exc}\nExcerpt: {excerpt}") from exc
+    if config.auto_exclude_admin_down_slots:
+        return _auto_exclude_admin_down_slots(session, snapshot, config)
+    return snapshot
 
 
-def run_once(wlc_config: WLCConfig, balance_config: APBalanceConfig, console: Console) -> None:
+def run_once(
+    wlc_config: WLCConfig,
+    balance_config: APBalanceConfig,
+    console: Console,
+    reporter: StartupReporter | None = None,
+) -> None:
     session = WLCLoadInfoSession(wlc_config)
+    reporter = reporter or StartupReporter(console)
     try:
+        reporter.step(f"Connecting to WLC {wlc_config.host}")
         session.connect()
+        reporter.step("Collecting AP radio load-info")
+        if balance_config.auto_exclude_admin_down_slots:
+            reporter.step("Loading radio admin/oper state")
         snapshot = _collect_with_error_handling(session, balance_config)
+        reporter.step("Rendering monitor")
         console.print(_render_snapshot(snapshot, balance_config))
     finally:
         session.disconnect()
 
 
-def run_live(wlc_config: WLCConfig, balance_config: APBalanceConfig, console: Console) -> None:
+def run_live(
+    wlc_config: WLCConfig,
+    balance_config: APBalanceConfig,
+    console: Console,
+    reporter: StartupReporter | None = None,
+) -> None:
     session = WLCLoadInfoSession(wlc_config)
+    reporter = reporter or StartupReporter(console)
     last_snapshot = LoadInfoSnapshot()
     try:
+        reporter.step(f"Connecting to WLC {wlc_config.host}")
         session.connect()
+        reporter.step("Collecting AP radio load-info")
+        if balance_config.auto_exclude_admin_down_slots:
+            reporter.step("Loading radio admin/oper state")
+        last_snapshot = _collect_with_error_handling(session, balance_config)
+        reporter.step("Rendering monitor")
         with Live(console=console, refresh_per_second=2, screen=False) as live:
             while True:
+                live.update(_render_snapshot(last_snapshot, balance_config))
+                sleep(balance_config.refresh_seconds)
                 last_snapshot = _collect_with_error_handling(
                     session, balance_config, previous=last_snapshot
                 )
-                live.update(_render_snapshot(last_snapshot, balance_config))
-                sleep(balance_config.refresh_seconds)
     except KeyboardInterrupt:
         console.print("\nShutting down...")
     finally:
@@ -93,3 +127,59 @@ def _extract_error_excerpt(message: str) -> str:
     if marker not in message:
         return ""
     return message.split(marker, 1)[1]
+
+
+def _auto_exclude_admin_down_slots(
+    session,
+    snapshot: LoadInfoSnapshot,
+    config: APBalanceConfig,
+) -> LoadInfoSnapshot:
+    ap_loads = []
+    inspectable_ids = {id(ap) for ap in filter_aps(snapshot.ap_loads, config)}
+    for ap in snapshot.ap_loads:
+        if id(ap) not in inspectable_ids:
+            ap_loads.append(ap)
+            continue
+        candidate_slots = tuple(
+            slot.slot
+            for slot in ap.slot_loads
+            if slot.clients == 0 and slot.utilization == 0
+        )
+        if not candidate_slots:
+            ap_loads.append(ap)
+            continue
+        admin_down_slots = session.get_admin_down_slots(ap.name, candidate_slots)
+        if not admin_down_slots:
+            ap_loads.append(ap)
+            continue
+        ap_loads.append(_copy_with_unavailable_slots(ap, admin_down_slots))
+    return LoadInfoSnapshot(
+        ap_loads=ap_loads,
+        timestamp=snapshot.timestamp,
+        parser_warnings=snapshot.parser_warnings,
+        poll_error=snapshot.poll_error,
+        error_excerpt=snapshot.error_excerpt,
+        raw_command=snapshot.raw_command,
+    )
+
+
+def _copy_with_unavailable_slots(ap: APLoad, unavailable_slots: set[int]) -> APLoad:
+    slot_loads = [
+        RadioSlotLoad(slot=slot.slot, clients=None, utilization=None)
+        if slot.slot in unavailable_slots
+        else slot
+        for slot in ap.slot_loads
+    ]
+    warning = "auto-excluded admin-down slots: " + ", ".join(
+        f"S{slot}" for slot in sorted(unavailable_slots)
+    )
+    return APLoad(
+        name=ap.name,
+        radio_mac=ap.radio_mac,
+        identity_label=ap.identity_label,
+        slots=ap.slots,
+        total_clients=ap.total_clients,
+        slot_loads=slot_loads,
+        timestamp=ap.timestamp,
+        warnings=[*ap.warnings, warning],
+    )

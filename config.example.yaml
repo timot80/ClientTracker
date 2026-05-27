@@ -1,13 +1,19 @@
+credentials:
+  profiles:
+    c9800-admin:
+      username: "netops-admin"
+      password_keyring: "wifiops:profile:c9800-admin:password"
+      enable_keyring: "wifiops:profile:c9800-admin:enable"
+
 wlc:
   host: "192.0.2.10"
-  username: "admin"
-  password: "changeme"
-  enable: "changeme"
+  credential_profile: "c9800-admin"
 
 ap:
-  username: "admin"
-  password: "changeme"
-  enable: "changeme"
+  credential_profile: "c9800-admin"
+
+# Plaintext username/password/enable values still work for local-only
+# compatibility, but credential profiles keep secrets out of config.yaml.
 
 local:
   ping_host: "8.8.8.8"
@@ -23,6 +29,8 @@ ap_balance:
   included_slots: []
   excluded_slots: []
   only_imbalanced: false
+  display_columns: 1
+  auto_exclude_admin_down_slots: false
   min_total_clients: 1
   imbalance:
     ratio_threshold: 10
