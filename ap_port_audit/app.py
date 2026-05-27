@@ -23,7 +23,7 @@ def collect_once(session, config: APPortAuditConfig) -> APPortSnapshot:
     return snapshot
 
 
-def run_once(wlc_config: WLCConfig, audit_config: APPortAuditConfig, console: Console) -> None:
+def run_once(wlc_config: WLCConfig, audit_config: APPortAuditConfig, console: Console) -> int:
     session = APPortAuditSession(wlc_config)
     try:
         console.print(f"[cyan]Connecting to WLC {wlc_config.host}[/cyan]")
@@ -33,8 +33,10 @@ def run_once(wlc_config: WLCConfig, audit_config: APPortAuditConfig, console: Co
         console.print("[cyan]Rendering AP Ethernet audit[/cyan]")
         if snapshot.poll_error and not snapshot.rows:
             console.print(_error_panel(snapshot))
+            return 1
         else:
             console.print(build_port_table(snapshot, audit_config))
+            return 0
     finally:
         session.disconnect()
 

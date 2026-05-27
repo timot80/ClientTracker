@@ -45,8 +45,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             audit_config = replace(audit_config, show_all=True)
         if args.speed_threshold is not None:
             audit_config = replace(audit_config, speed_threshold=args.speed_threshold)
-        run_once(config.wlc, audit_config, console)
-        return 0
+        return run_once(config.wlc, audit_config, console)
     except Exception as exc:
         print(str(exc), file=sys.stderr)
         return 1
