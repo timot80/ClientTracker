@@ -1,0 +1,15 @@
+wlc:
+  host: "192.0.2.10"
+  username: "admin"
+  password: "changeme"
+  enable: "changeme"
+
+ap:
+  username: "admin"
+  password: "changeme"
+  enable: "changeme"
+
+local:
+  ping_host: "8.8.8.8"
+  sound_alerts: true
+  identity_helper_path: ""
