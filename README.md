@@ -59,6 +59,60 @@ The script will:
 
 Press **Ctrl+C** to stop.
 
+## AP Radio Distribution Monitor
+
+`ap_radio_monitor.py` is a standalone live monitor for finding APs where client
+counts are skewed across radio slots. It uses one SSH session to the Catalyst
+9800 WLC and polls:
+
+```
+show ap summary load-info
+```
+
+Run the live monitor:
+
+```
+python ap_radio_monitor.py
+```
+
+Useful options:
+
+```
+python ap_radio_monitor.py --once
+python ap_radio_monitor.py --refresh 30
+python ap_radio_monitor.py --only-imbalanced
+python ap_radio_monitor.py --config config.yaml
+```
+
+Add optional AP radio monitor settings to `config.yaml`:
+
+```yaml
+ap_balance:
+  refresh_seconds: 30
+  include:
+    - "NOC-*"
+  exclude:
+    - "*-TEST"
+  included_slots: []
+  excluded_slots: []
+  only_imbalanced: false
+  min_total_clients: 1
+  imbalance:
+    ratio_threshold: 10
+    min_difference: 20
+    include_zero_client_slots: true
+```
+
+The monitor displays each slot separately, for example:
+
+```
+S0 1 cl / 12% util █ | S1 50 cl / 76% util ████████████ | S2 0 cl / 4% util .
+```
+
+The percentage is radio/channel utilization from the WLC. It is not the
+percentage of clients on that radio. Client distribution scoring is based on
+client counts, while utilization is shown as RF context.
+
 ## Example Output
 
 ```
@@ -88,6 +142,8 @@ Ctrl+C to quit
 ```
 ClientTracker/
 ├── client_tracker.py    # Main script
+├── ap_radio_monitor.py  # AP radio distribution monitor
+├── ap_radio_monitor/    # AP monitor package
 ├── config.yaml          # WLC and AP credentials (not tracked in git)
 ├── requirements.txt     # Python dependencies
 └── README.md
