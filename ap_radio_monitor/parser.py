@@ -83,17 +83,22 @@ def _is_ignored_line(line: str) -> bool:
 def _parse_row(line: str, mode: str, slot_numbers: list[int]) -> APLoad:
     tokens = line.split()
     pair_count = len(slot_numbers)
-    if len(tokens) < (pair_count * 2) + 4:
+    if len(tokens) < (pair_count * 2) + 3:
         raise ValueError("not enough fields")
 
     pair_tokens = tokens[-pair_count * 2 :]
     prefix = tokens[: -pair_count * 2]
-    if len(prefix) < 4:
+    if len(prefix) < 3:
         raise ValueError("not enough identity fields")
 
-    slots = _to_int(prefix[-2])
-    total_clients = _to_int(prefix[-1])
-    identity_tokens = prefix[:-2]
+    if len(prefix) >= 4:
+        slots = _to_int(prefix[-2])
+        total_clients = _to_int(prefix[-1])
+        identity_tokens = prefix[:-2]
+    else:
+        slots = _to_int(prefix[-1])
+        total_clients = _sum_slot_clients(pair_tokens)
+        identity_tokens = prefix[:-1]
 
     if mode == "observed":
         if not identity_tokens or not _MAC_RE.match(identity_tokens[-1]):
@@ -140,3 +145,12 @@ def _to_optional_int(value: str) -> int | None:
     if value.upper() == "NA":
         return None
     return _to_int(value)
+
+
+def _sum_slot_clients(pair_tokens: list[str]) -> int:
+    total = 0
+    for index in range(0, len(pair_tokens), 2):
+        clients = _to_optional_int(pair_tokens[index])
+        if clients is not None:
+            total += clients
+    return total

@@ -66,6 +66,27 @@ def test_parse_keeps_wlc_total_without_warning_when_slot_sum_differs():
     assert snapshot.parser_warnings == []
 
 
+def test_parse_observed_zero_client_row_with_blank_total_clients():
+    output = """
+AP Name                           Radio Mac       Slots  Clients       Slot0                   Slot1                   Slot2                   Slot3
+                                                                Clients  Utilisation(%)  Clients  Utilisation(%)  Clients  Utilisation(%)  Clients  Utilisation(%)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+MBY-CON-SCC1_BAYSIDE_A-32         1cfc.1792.82c0   3              0        0               0        0               0        0               NA       NA
+"""
+
+    snapshot = parse_load_info(output)
+
+    assert snapshot.ap_loads[0].name == "MBY-CON-SCC1_BAYSIDE_A-32"
+    assert snapshot.ap_loads[0].total_clients == 0
+    assert [(slot.slot, slot.clients, slot.utilization) for slot in snapshot.ap_loads[0].slot_loads] == [
+        (0, 0, 0),
+        (1, 0, 0),
+        (2, 0, 0),
+        (3, None, None),
+    ]
+    assert snapshot.parser_warnings == []
+
+
 def test_parse_skips_malformed_rows_but_keeps_valid_rows():
     output = OBSERVED_OUTPUT + "\nthis row is not valid\n"
     snapshot = parse_load_info(output)
