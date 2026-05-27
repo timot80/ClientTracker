@@ -1,6 +1,6 @@
 # CLI Command Access Requirements
 
-This document lists the controller, AP, and local endpoint commands used by ClientTracker and the access level needed for each mode.
+This document lists the controller, AP, and local endpoint commands used by the ClientTracker tools and the access level needed for each mode.
 
 ## Summary
 
@@ -19,7 +19,8 @@ Recommended production model:
 | Command | Used For | Current App Path | Minimum Observed Access | Recommended Authorization |
 | --- | --- | --- | --- | --- |
 | `show wireless client mac-address <mac> detail` | Full client state: AP name, SSID, protocol, policy state, RSSI, SNR | Infrastructure and combined mode | Requires privileged EXEC or command authorization on tested Catalyst 9800 controllers | Allow exact command pattern for the service account |
-| `show ap summary` | Resolve associated AP name to AP management IP | Infrastructure and combined mode after WLC client detail identifies the AP | Works in common read-only contexts, but depends on local AAA policy | Allow exact command |
+| `show ap summary` | Resolve associated AP name to AP management IP | Client tracker infrastructure and combined mode after WLC client detail identifies the AP | Works in common read-only contexts, but depends on local AAA policy | Allow exact command |
+| `show ap summary load-info` | AP radio client counts and channel utilization by radio slot | AP radio distribution monitor | Works in common read-only contexts, but depends on local AAA policy | Allow exact command |
 | `show run \| include hostname` | Optional controller hostname display | WLC session setup | May be denied for read-only users | Optional; app continues if hostname is unavailable |
 
 The app currently depends on `show wireless client mac-address <mac> detail` for complete WLC-side client telemetry. If that command is denied, the app cannot currently populate full WLC client fields.
@@ -63,6 +64,7 @@ For a least-privilege WLC service account, allow only the operational show comma
 ```text
 show wireless client mac-address .* detail
 show ap summary
+show ap summary load-info
 show run | include hostname
 ```
 
@@ -91,6 +93,7 @@ show wireless client summary
 show wireless client summary detail
 show wireless client mac-address aaaa.bbbb.cccc detail
 show ap summary
+show ap summary load-info
 show run | include hostname
 ```
 
@@ -106,6 +109,7 @@ Expected outcomes:
 - Full WLC tracking requires successful output from `show wireless client mac-address <mac> detail`.
 - Summary-only tracking requires successful output from `show wireless client summary`.
 - AP-side stats require successful AP SSH plus `show dot11 clients`.
+- AP radio distribution monitoring requires successful output from `show ap summary load-info`.
 
 ## References
 

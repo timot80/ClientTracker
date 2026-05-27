@@ -1,8 +1,13 @@
 # ClientTracker
 
-Real-time wireless client roaming tracker for Cisco Catalyst 9800 Wireless LAN Controllers, Cisco APs, and local client Wi-Fi telemetry.
+Wireless operations tools for Cisco Catalyst 9800 environments.
 
-ClientTracker can run from a management machine to watch the infrastructure view, from the wireless client to watch local OS telemetry, or from the wireless client in combined mode to show both views in one live terminal UI.
+This repository currently includes two terminal applications:
+
+- `client_tracker.py`: real-time wireless client roaming tracker using WLC, AP, and optional local endpoint telemetry.
+- `ap_radio_monitor.py`: live AP radio client distribution monitor for spotting APs with skewed client counts across radio slots.
+
+The client tracker can run from a management machine to watch the infrastructure view, from the wireless client to watch local OS telemetry, or from the wireless client in combined mode to show both views in one live terminal UI.
 
 ## Requirements
 
@@ -10,6 +15,7 @@ ClientTracker can run from a management machine to watch the infrastructure view
 - Network SSH access to the WLC and APs for `infra` and `combined` modes
 - Enable-level access on APs for AP-side client stats
 - macOS or Windows for local Wi-Fi telemetry
+- WLC SSH access for the AP radio distribution monitor
 
 See [CLI Command Access Requirements](docs/cli-command-access.md) for the WLC, AP, and local endpoint commands used by each mode.
 
@@ -45,7 +51,22 @@ local:
   ping_host: "8.8.8.8"
   sound_alerts: true
   identity_helper_path: ""
+
+ap_balance:
+  refresh_seconds: 30
+  include: []
+  exclude: []
+  included_slots: []
+  excluded_slots: []
+  only_imbalanced: false
+  min_total_clients: 1
+  imbalance:
+    ratio_threshold: 10
+    min_difference: 20
+    include_zero_client_slots: true
 ```
+
+Secrets are loaded from local `config.yaml` or environment variables. `config.yaml` is ignored by Git and should not be committed.
 
 Environment variables override file values:
 
@@ -77,6 +98,8 @@ Security notes:
 - Review any helper source before configuring it.
 
 ## Usage
+
+### Client Roaming Tracker
 
 Infrastructure mode tracks a client through the WLC and associated AP:
 
@@ -142,7 +165,7 @@ python client_tracker.py aabbccddeeff
 
 Press Ctrl+C to stop. The app closes AP sessions, disconnects the WLC, and flushes CSV output during shutdown.
 
-## AP Radio Distribution Monitor
+### AP Radio Distribution Monitor
 
 `ap_radio_monitor.py` is a standalone live monitor for finding APs where client
 counts are skewed across radio slots. It uses one SSH session to the Catalyst
@@ -224,7 +247,7 @@ Ctrl+C to quit
 
 ```
 ClientTracker/
-├── client_tracker.py    # Main script
+├── client_tracker.py    # Unified client tracker executable
 ├── ap_radio_monitor.py  # AP radio distribution monitor
 ├── ap_radio_monitor/    # AP monitor package
 ├── client_tracker/      # Unified client tracker package

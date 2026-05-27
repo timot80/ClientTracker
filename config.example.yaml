@@ -13,3 +13,16 @@ local:
   ping_host: "8.8.8.8"
   sound_alerts: true
   identity_helper_path: ""
+
+ap_balance:
+  refresh_seconds: 30
+  include: []
+  exclude: []
+  included_slots: []
+  excluded_slots: []
+  only_imbalanced: false
+  min_total_clients: 1
+  imbalance:
+    ratio_threshold: 10
+    min_difference: 20
+    include_zero_client_slots: true
