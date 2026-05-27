@@ -42,7 +42,7 @@ def render_slot_cell(ap: APLoad, slot_number: int, width: int = 4) -> str:
 
 def build_monitor_table(snapshot: LoadInfoSnapshot, config: APBalanceConfig) -> Panel:
     """Build the Rich renderable for one monitor snapshot."""
-    table = Table(expand=True)
+    table = Table(expand=False)
     table.add_column("AP", no_wrap=True)
     table.add_column("Cli", justify="right", no_wrap=True)
     table.add_column("S0", no_wrap=True)
@@ -89,7 +89,7 @@ def build_monitor_table(snapshot: LoadInfoSnapshot, config: APBalanceConfig) -> 
 
     last_poll = snapshot.timestamp.strftime("%H:%M:%S")
     title = f"Last {last_poll} | {len(aps)} APs | AP Radio"
-    return Panel(table, title=title, border_style="cyan")
+    return Panel(table, title=title, border_style="cyan", expand=False)
 
 
 def _bar(clients: int, max_clients: int, width: int) -> str:

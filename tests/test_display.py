@@ -90,6 +90,19 @@ def test_build_monitor_table_keeps_last_poll_visible_in_narrow_title():
     assert "Last 14:03:09" in first_line
 
 
+def test_build_monitor_table_stays_compact_on_wide_terminal():
+    snapshot = LoadInfoSnapshot(
+        ap_loads=[make_ap("NOC-AP-MBY-1", [2, 2, 1, None])],
+        timestamp=datetime(2026, 5, 27, 14, 3, 9),
+    )
+    console = Console(record=True, width=220)
+
+    console.print(build_monitor_table(snapshot, APBalanceConfig()))
+    header_line = next(line for line in console.export_text().splitlines() if "┃ AP" in line)
+
+    assert len(header_line) < 120
+
+
 def test_build_monitor_table_renders_parser_warning_and_poll_error():
     snapshot = LoadInfoSnapshot(
         ap_loads=[make_ap("NOC-AP-1", [1, 50])],
