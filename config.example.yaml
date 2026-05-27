@@ -36,3 +36,9 @@ ap_balance:
     ratio_threshold: 10
     min_difference: 20
     include_zero_client_slots: true
+
+ap_ports:
+  include: []
+  exclude: []
+  show_all: false
+  speed_threshold: 1000

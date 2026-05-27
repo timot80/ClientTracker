@@ -81,6 +81,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Utilization threshold for zero-client APs to show BUSY-IDLE",
     )
 
+    ap_ports = c9800_subcommands.add_parser(
+        "ap-ports",
+        help="Audit AP Ethernet port speed and duplex",
+        description="Audit AP Ethernet port speed and duplex from a Catalyst 9800 WLC.",
+    )
+    ap_ports.add_argument("--config", help="Path to config.yaml")
+    ap_ports.add_argument("--include", action="append", default=[], help="AP name wildcard to include")
+    ap_ports.add_argument("--exclude", action="append", default=[], help="AP name wildcard to exclude")
+    ap_ports.add_argument("--all", action="store_true", help="Show all AP ports, including healthy rows")
+    ap_ports.add_argument("--speed-threshold", type=int, help="Minimum expected negotiated speed in Mbps")
+
     c9800_client = c9800_subcommands.add_parser(
         "client",
         help="Track a wireless client from Catalyst 9800 infrastructure",
@@ -123,6 +134,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         from ap_radio_monitor.cli import main as radio_main
 
         return _exit_code(radio_main(_delegated_args(argv, "radio")))
+
+    if args.command == "c9800" and args.c9800_command == "ap-ports":
+        from ap_port_audit.cli import main as ap_ports_main
+
+        return _exit_code(ap_ports_main(_delegated_args(argv, "ap-ports")))
 
     if args.command == "c9800" and args.c9800_command == "client":
         from client_tracker.cli import main as client_main

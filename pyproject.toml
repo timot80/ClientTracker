@@ -19,7 +19,7 @@ dependencies = [
 wifiops = "wifiops.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["ap_radio_monitor*", "client_tracker*", "wifiops*"]
+include = ["ap_radio_monitor*", "ap_port_audit*", "client_tracker*", "wifiops*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

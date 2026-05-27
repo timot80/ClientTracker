@@ -232,6 +232,16 @@ def test_c9800_radio_preserves_current_monitor_options():
     )
 
 
+def test_c9800_ap_ports_delegates_to_ap_port_audit():
+    port_main = Mock(return_value=0)
+
+    with patch("ap_port_audit.cli.main", port_main):
+        exit_code = main(["c9800", "ap-ports", "--config", "config.yaml", "--include", "MBY-*"])
+
+    assert exit_code == 0
+    port_main.assert_called_once_with(["--config", "config.yaml", "--include", "MBY-*"])
+
+
 def test_c9800_client_defaults_to_infra_mode():
     client_main = Mock(return_value=None)
 
