@@ -78,24 +78,46 @@ Environment variables override file values:
 - `CLIENT_TRACKER_AP_PASSWORD`
 - `CLIENT_TRACKER_AP_ENABLE`
 
-### macOS SSID/BSSID unredaction helper
+### macOS SSID/BSSID helper
 
-On modern macOS, `wdutil` can return `<redacted>` for SSID and BSSID even when run with sudo. ClientTracker can optionally call an explicitly configured local helper to fill only those two fields while keeping RF metrics from `wdutil`.
+On modern macOS, `wdutil` can return `<redacted>` for SSID and BSSID even when run with sudo. ClientTracker includes a small macOS helper that requests Location Services permission and fills only those two fields while keeping RF metrics from `wdutil`.
+
+Build and install the repo-owned helper:
+
+```bash
+scripts/build-macos-wifi-identity-helper.sh
+```
+
+The script installs:
+
+```text
+~/Applications/client-tracker-wifi-identity.app/Contents/MacOS/client-tracker-wifi-identity
+```
+
+Run the helper once as your normal macOS user and approve the Location Services prompt:
+
+```bash
+~/Applications/client-tracker-wifi-identity.app/Contents/MacOS/client-tracker-wifi-identity
+```
+
+ClientTracker auto-detects that installed helper. An explicit helper path is still supported for advanced cases:
 
 Example:
 
 ```yaml
 local:
-  identity_helper_path: "/Users/you/Applications/wifi-unredactor.app/Contents/MacOS/wifi-unredactor"
+  identity_helper_path: "/Users/you/Applications/client-tracker-wifi-identity.app/Contents/MacOS/client-tracker-wifi-identity"
 ```
 
 Security notes:
 
-- ClientTracker never downloads, installs, or auto-discovers this helper.
-- The helper path must be configured explicitly in local `config.yaml`.
+- ClientTracker never downloads external helper code.
+- The built-in helper source is tracked in this repository under `macos/WifiIdentityHelper`.
+- The default helper is auto-detected only from the current user's `~/Applications/client-tracker-wifi-identity.app`.
+- Any custom helper path must be configured explicitly in local `config.yaml`.
 - The helper is executed without a shell and is expected to print JSON with `ssid` and `bssid` fields.
 - When ClientTracker is launched with sudo, the helper is run as the original `SUDO_USER` so macOS Location Services permissions apply to the user's app permission.
-- Review any helper source before configuring it.
+- Review any custom helper source before configuring it.
 
 ## Usage
 
@@ -251,6 +273,8 @@ ClientTracker/
 ├── ap_radio_monitor.py  # AP radio distribution monitor
 ├── ap_radio_monitor/    # AP monitor package
 ├── client_tracker/      # Unified client tracker package
+├── macos/               # Repo-owned macOS helper source
+├── scripts/             # Local build/install helpers
 ├── config.yaml          # WLC and AP credentials (not tracked in git)
 ├── requirements.txt     # Python dependencies
 └── README.md

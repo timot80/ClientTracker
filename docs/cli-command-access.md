@@ -47,7 +47,8 @@ AP validation is independent from WLC authorization. The WLC can identify an AP 
 | Command | Used For | Required Access |
 | --- | --- | --- |
 | `wdutil info` | Local Wi-Fi interface, channel, RSSI, noise, CCA, PHY, MCS, NSS, security, IP, router | Run through `sudo -n`; start with `sudo -v` or run ClientTracker with sudo |
-| Configured SSID/BSSID helper | Optional unredaction of SSID and BSSID when macOS redacts `wdutil` output | Explicit absolute helper path in `config.yaml`; Location Services permission for the helper app |
+| Repo-owned SSID/BSSID helper | Optional unredaction of SSID and BSSID when macOS redacts `wdutil` output | Installed with `scripts/build-macos-wifi-identity-helper.sh`; Location Services permission for `client-tracker-wifi-identity.app` |
+| Configured custom SSID/BSSID helper | Advanced override for SSID and BSSID lookup | Explicit absolute helper path in `config.yaml`; Location Services permission for the helper app |
 
 ClientTracker intentionally requires the useful macOS path to use sudo because non-sudo macOS Wi-Fi commands do not provide the same RF detail.
 

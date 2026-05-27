@@ -4,6 +4,7 @@ import os
 import pytest
 
 from client_tracker.local import LocalTelemetryPoller
+from client_tracker.local import default_macos_identity_helper_path
 from client_tracker.local import parse_airport_output, parse_identity_helper_output
 from client_tracker.local import parse_netsh_output, parse_wdutil_output
 
@@ -158,6 +159,63 @@ WIFI
     assert state.signal == "-61"
 
 
+def test_macos_poller_auto_detects_repo_owned_identity_helper(tmp_path, monkeypatch):
+    output_path = tmp_path / "helper-output.json"
+    helper = (
+        tmp_path
+        / "Applications"
+        / "client-tracker-wifi-identity.app"
+        / "Contents"
+        / "MacOS"
+        / "client-tracker-wifi-identity"
+    )
+    helper.parent.mkdir(parents=True)
+    helper.write_text("#!/bin/sh\n", encoding="utf-8")
+    calls = []
+
+    def fake_check_output(argv, timeout, **_kwargs):
+        calls.append(argv)
+        if argv == ["sudo", "-n", "wdutil", "info"]:
+            return b"""
+WIFI
+    Interface Name       : en0
+    SSID                 : <redacted>
+    BSSID                : <redacted>
+    RSSI                 : -61 dBm
+"""
+        if argv == [
+            "open",
+            "-W",
+            "-n",
+            str(helper.parents[2]),
+            "--args",
+            "--output",
+            str(output_path),
+        ]:
+            output_path.write_text(
+                '{"interface":"en0","ssid":"Corp Guest WiFi","bssid":"aa:bb:cc:dd:ee:ff"}',
+                encoding="utf-8",
+            )
+            return b""
+        raise AssertionError(f"unexpected command: {argv}")
+
+    class FakeTempFile:
+        name = str(output_path)
+
+        def close(self):
+            return None
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr("subprocess.check_output", fake_check_output)
+    monkeypatch.setattr("tempfile.NamedTemporaryFile", lambda **_kwargs: FakeTempFile())
+
+    state = LocalTelemetryPoller(platform="darwin").poll()
+
+    assert default_macos_identity_helper_path() == str(helper)
+    assert state.ssid == "Corp Guest WiFi"
+    assert state.bssid == "aa:bb:cc:dd:ee:ff"
+
+
 def test_sudo_run_invokes_identity_helper_as_original_user(monkeypatch):
     calls = []
 
@@ -190,6 +248,82 @@ WIFI
 
     assert state.ssid == "Corp Guest WiFi"
     assert state.bssid == "aa:bb:cc:dd:ee:ff"
+
+
+def test_sudo_run_invokes_default_identity_helper_app_as_original_user(tmp_path, monkeypatch):
+    output_path = tmp_path / "helper-output.json"
+    helper = (
+        tmp_path
+        / "Applications"
+        / "client-tracker-wifi-identity.app"
+        / "Contents"
+        / "MacOS"
+        / "client-tracker-wifi-identity"
+    )
+    helper.parent.mkdir(parents=True)
+    helper.write_text("#!/bin/sh\n", encoding="utf-8")
+    calls = []
+    chown_calls = []
+    chmod_calls = []
+
+    class UserInfo:
+        pw_uid = 501
+        pw_gid = 20
+
+    class FakeTempFile:
+        name = str(output_path)
+
+        def close(self):
+            return None
+
+    def fake_named_temporary_file(**kwargs):
+        assert kwargs["dir"] == "/tmp"
+        output_path.write_text("", encoding="utf-8")
+        return FakeTempFile()
+
+    def fake_check_output(argv, timeout, **_kwargs):
+        calls.append(argv)
+        if argv == ["sudo", "-n", "wdutil", "info"]:
+            return b"""
+WIFI
+    SSID                 : <redacted>
+    BSSID                : <redacted>
+"""
+        if argv == [
+            "sudo",
+            "-n",
+            "-u",
+            "timotbar",
+            "open",
+            "-W",
+            "-n",
+            str(helper.parents[2]),
+            "--args",
+            "--output",
+            str(output_path),
+        ]:
+            output_path.write_text(
+                '{"ssid":"Corp Guest WiFi","bssid":"aa:bb:cc:dd:ee:ff"}',
+                encoding="utf-8",
+            )
+            return b""
+        raise AssertionError(f"unexpected command: {argv}")
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("SUDO_USER", "timotbar")
+    monkeypatch.setattr(os, "geteuid", lambda: 0)
+    monkeypatch.setattr("pwd.getpwnam", lambda username: UserInfo())
+    monkeypatch.setattr("os.chown", lambda path, uid, gid: chown_calls.append((path, uid, gid)))
+    monkeypatch.setattr("os.chmod", lambda path, mode: chmod_calls.append((path, mode)))
+    monkeypatch.setattr("tempfile.NamedTemporaryFile", fake_named_temporary_file)
+    monkeypatch.setattr("subprocess.check_output", fake_check_output)
+
+    state = LocalTelemetryPoller(platform="darwin").poll()
+
+    assert state.ssid == "Corp Guest WiFi"
+    assert state.bssid == "aa:bb:cc:dd:ee:ff"
+    assert chown_calls == [(str(output_path), 501, 20)]
+    assert chmod_calls == [(str(output_path), 0o600)]
 
 
 def test_identity_helper_path_must_be_absolute():

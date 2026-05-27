@@ -3,8 +3,10 @@ from __future__ import annotations
 import math
 import json
 import os
+import pwd
 import subprocess
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -14,6 +16,8 @@ AIRPORT = (
     "/System/Library/PrivateFrameworks/Apple80211.framework/"
     "Versions/Current/Resources/airport"
 )
+MACOS_IDENTITY_HELPER_APP = "client-tracker-wifi-identity.app"
+MACOS_IDENTITY_HELPER_EXECUTABLE = "client-tracker-wifi-identity"
 WDUTIL_SECTION_NAMES = {
     "NETWORK",
     "WIFI",
@@ -24,6 +28,17 @@ WDUTIL_SECTION_NAMES = {
     "WIFI RECOVERIES LAST HOUR",
     "WIFI LINK TESTS LAST HOUR",
 }
+
+
+def default_macos_identity_helper_path() -> str:
+    return str(
+        Path.home()
+        / "Applications"
+        / MACOS_IDENTITY_HELPER_APP
+        / "Contents"
+        / "MacOS"
+        / MACOS_IDENTITY_HELPER_EXECUTABLE
+    )
 
 
 def _value_after_colon(line: str) -> tuple[str, str] | None:
@@ -234,23 +249,63 @@ class LocalTelemetryPoller:
         raise RuntimeError(f"Local telemetry is unsupported on {self.platform}")
 
     def _enrich_identity(self, state: LocalClientState):
-        if not self.identity_helper_path:
-            return
         if state.ssid != "<redacted>" and state.bssid != "<redacted>":
             return
-        helper_path = Path(self.identity_helper_path)
+        helper = self._identity_helper_path()
+        if not helper:
+            return
+        helper_path = Path(helper)
         if not helper_path.is_absolute():
             raise RuntimeError("identity helper path must be an absolute path")
-        argv = [self.identity_helper_path]
-        sudo_user = os.environ.get("SUDO_USER", "")
-        if os.geteuid() == 0 and sudo_user and sudo_user != "root":
-            argv = ["sudo", "-n", "-u", sudo_user, self.identity_helper_path]
-        output = subprocess.check_output(argv, timeout=10)
+        output = self._run_identity_helper(helper)
         ssid, bssid = parse_identity_helper_output(output.decode("utf-8", errors="replace"))
         if state.ssid == "<redacted>" and ssid:
             state.ssid = ssid
         if state.bssid == "<redacted>" and bssid:
             state.bssid = bssid
+
+    def _run_identity_helper(self, helper: str) -> bytes:
+        sudo_user = os.environ.get("SUDO_USER", "")
+        run_as_user = os.geteuid() == 0 and sudo_user and sudo_user != "root"
+        if not self.identity_helper_path and helper == default_macos_identity_helper_path():
+            temp_kwargs = {
+                "prefix": "client-tracker-wifi-",
+                "suffix": ".json",
+                "delete": False,
+            }
+            if run_as_user:
+                temp_kwargs["dir"] = "/tmp"
+            temp = tempfile.NamedTemporaryFile(**temp_kwargs)
+            output_path = temp.name
+            temp.close()
+            if run_as_user:
+                user_info = pwd.getpwnam(sudo_user)
+                os.chown(output_path, user_info.pw_uid, user_info.pw_gid)
+                os.chmod(output_path, 0o600)
+            app_path = str(Path(helper).parents[2])
+            argv = ["open", "-W", "-n", app_path, "--args", "--output", output_path]
+            if run_as_user:
+                argv = ["sudo", "-n", "-u", sudo_user, *argv]
+            try:
+                subprocess.check_output(argv, timeout=45)
+                return Path(output_path).read_bytes()
+            finally:
+                try:
+                    Path(output_path).unlink()
+                except FileNotFoundError:
+                    pass
+        argv = [helper]
+        if run_as_user:
+            argv = ["sudo", "-n", "-u", sudo_user, helper]
+        return subprocess.check_output(argv, timeout=10)
+
+    def _identity_helper_path(self) -> str:
+        if self.identity_helper_path:
+            return self.identity_helper_path
+        helper = default_macos_identity_helper_path()
+        if Path(helper).exists():
+            return helper
+        return ""
 
     def _poll_macos_fallback(self) -> LocalClientState:
         state = LocalClientState(platform="darwin", timestamp=datetime.now())

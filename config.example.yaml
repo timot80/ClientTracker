@@ -12,6 +12,8 @@ ap:
 local:
   ping_host: "8.8.8.8"
   sound_alerts: true
+  # Optional override. Leave blank to auto-detect the repo-owned macOS helper
+  # installed by scripts/build-macos-wifi-identity-helper.sh.
   identity_helper_path: ""
 
 ap_balance:
