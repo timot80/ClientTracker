@@ -28,6 +28,7 @@ def load_config(path: str | Path) -> AppConfig:
         username=_required_str(wlc_raw, "wlc.username"),
         password=_required_str(wlc_raw, "wlc.password"),
         enable=str(wlc_raw.get("enable", "") or ""),
+        read_timeout=int(wlc_raw.get("read_timeout", 90)),
     )
 
     ap_raw = raw.get("ap_balance") or {}

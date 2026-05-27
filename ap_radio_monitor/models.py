@@ -11,6 +11,7 @@ class WLCConfig:
     username: str
     password: str
     enable: str = ""
+    read_timeout: int = 90
 
 
 @dataclass(frozen=True)

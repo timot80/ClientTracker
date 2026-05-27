@@ -26,12 +26,17 @@ class WLCLoadInfoSession:
         )
         if self.config.enable and not self.connection.check_enable_mode():
             self.connection.enable()
+        self.connection.send_command("terminal length 0", expect_string=r"#", read_timeout=30)
 
     def get_load_info(self) -> str:
         with self._lock:
             if self.connection is None:
                 raise RuntimeError("WLC session not connected")
-            return self.connection.send_command("show ap summary load-info")
+            return self.connection.send_command(
+                "show ap summary load-info",
+                expect_string=r"#",
+                read_timeout=self.config.read_timeout,
+            )
 
     def disconnect(self) -> None:
         with self._lock:

@@ -34,6 +34,7 @@ wlc:
   host: "192.0.2.10"
   username: "admin"
   password: "secret"
+  read_timeout: 120
 ap_balance:
   refresh_seconds: 15
   include: ["NOC-*"]
@@ -57,6 +58,7 @@ ap_balance:
     config = load_radio_config(path)
 
     assert config.ap_balance.refresh_seconds == 15
+    assert config.wlc.read_timeout == 120
     assert config.ap_balance.include == ("NOC-*",)
     assert config.ap_balance.excluded_slots == (0,)
     assert config.ap_balance.include_zero_client_slots is False
