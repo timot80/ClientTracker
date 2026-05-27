@@ -5,6 +5,7 @@ from time import sleep
 from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
+from rich.table import Table
 
 from ap_radio_monitor.display import build_monitor_table
 from ap_radio_monitor.models import APBalanceConfig, LoadInfoSnapshot, WLCConfig
@@ -16,7 +17,11 @@ def collect_once(session, config: APBalanceConfig) -> LoadInfoSnapshot:
     """Collect and parse one load-info snapshot from an existing WLC-like session."""
     del config
     output = session.get_load_info()
-    return parse_load_info(output)
+    try:
+        return parse_load_info(output)
+    except LoadInfoParseError as exc:
+        excerpt = _output_excerpt(output)
+        raise LoadInfoParseError(f"{exc}\nExcerpt: {excerpt}") from exc
 
 
 def run_once(wlc_config: WLCConfig, balance_config: APBalanceConfig, console: Console) -> None:
@@ -57,6 +62,7 @@ def _collect_with_error_handling(
             ap_loads=previous.ap_loads if previous else [],
             parser_warnings=previous.parser_warnings if previous else [],
             poll_error=str(exc),
+            error_excerpt=_extract_error_excerpt(str(exc)),
         )
     except Exception as exc:
         return LoadInfoSnapshot(
@@ -68,5 +74,22 @@ def _collect_with_error_handling(
 
 def _render_snapshot(snapshot: LoadInfoSnapshot, config: APBalanceConfig):
     if snapshot.poll_error and not snapshot.ap_loads:
-        return Panel(f"[red]{snapshot.poll_error}[/red]", title="AP Radio Distribution Monitor")
+        table = Table.grid()
+        table.add_column()
+        table.add_row(f"[red]{snapshot.poll_error}[/red]")
+        if snapshot.error_excerpt:
+            table.add_row(f"[dim]{snapshot.error_excerpt}[/dim]")
+        return Panel(table, title="AP Radio Distribution Monitor")
     return build_monitor_table(snapshot, config)
+
+
+def _output_excerpt(output: str, limit: int = 160) -> str:
+    compact = " ".join(line.strip() for line in output.splitlines() if line.strip())
+    return compact[:limit]
+
+
+def _extract_error_excerpt(message: str) -> str:
+    marker = "\nExcerpt: "
+    if marker not in message:
+        return ""
+    return message.split(marker, 1)[1]

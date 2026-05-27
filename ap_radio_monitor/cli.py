@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from rich.console import Console
@@ -29,7 +30,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    app_config = load_config(args.config)
+    console = Console(stderr=True)
+    try:
+        app_config = load_config(args.config)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        return 1
     balance_config = _override_balance_config(
         app_config.ap_balance,
         refresh=args.refresh,
@@ -40,9 +46,17 @@ def main(argv: list[str] | None = None) -> int:
 
     console = Console()
     if args.once:
-        run_once(app_config.wlc, balance_config, console)
+        try:
+            run_once(app_config.wlc, balance_config, console)
+        except Exception as exc:
+            print(f"Failed to start AP radio monitor: {exc}", file=sys.stderr)
+            return 1
     else:
-        run_live(app_config.wlc, balance_config, console)
+        try:
+            run_live(app_config.wlc, balance_config, console)
+        except Exception as exc:
+            print(f"Failed to start AP radio monitor: {exc}", file=sys.stderr)
+            return 1
     return 0
 
 

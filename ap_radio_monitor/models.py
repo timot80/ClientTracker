@@ -58,6 +58,7 @@ class LoadInfoSnapshot:
     timestamp: datetime = field(default_factory=datetime.now)
     parser_warnings: list[str] = field(default_factory=list)
     poll_error: str = ""
+    error_excerpt: str = ""
     raw_command: str = "show ap summary load-info"
 
 

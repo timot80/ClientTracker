@@ -53,9 +53,22 @@ def build_monitor_table(snapshot: LoadInfoSnapshot, config: APBalanceConfig) -> 
             style=style,
         )
 
-    title = f"AP Radio Distribution Monitor | {len(aps)} APs"
+    if snapshot.poll_error or snapshot.parser_warnings:
+        table.add_section()
     if snapshot.poll_error:
-        title += " | poll error"
+        table.add_row("Poll Error", "", snapshot.poll_error, "", style="red")
+    for warning in snapshot.parser_warnings[:3]:
+        table.add_row("Warning", "", warning, "", style="yellow")
+    if len(snapshot.parser_warnings) > 3:
+        table.add_row(
+            "Warning",
+            "",
+            f"{len(snapshot.parser_warnings) - 3} additional parser warnings hidden",
+            "",
+            style="yellow",
+        )
+
+    title = f"AP Radio Distribution Monitor | {len(aps)} APs"
     return Panel(table, title=title, border_style="cyan")
 
 
