@@ -30,12 +30,25 @@ def render_slot_distribution(ap: APLoad, width: int = 8) -> str:
     return "\n".join(parts)
 
 
+def render_slot_cell(ap: APLoad, slot_number: int, width: int = 4) -> str:
+    """Render one AP slot as a compact one-line table cell."""
+    slot_by_number = {slot.slot: slot for slot in ap.slot_loads}
+    slot = slot_by_number.get(slot_number)
+    if slot is None or slot.clients is None:
+        return "--"
+    util = "--" if slot.utilization is None else f"{slot.utilization}%"
+    return f"{slot.clients}c {util}"
+
+
 def build_monitor_table(snapshot: LoadInfoSnapshot, config: APBalanceConfig) -> Panel:
     """Build the Rich renderable for one monitor snapshot."""
     table = Table(expand=True)
-    table.add_column("AP Name", no_wrap=True)
-    table.add_column("Clients", justify="right", no_wrap=True)
-    table.add_column("Radio Slots", overflow="fold", ratio=3)
+    table.add_column("AP", no_wrap=True)
+    table.add_column("Cli", justify="right", no_wrap=True)
+    table.add_column("S0", no_wrap=True)
+    table.add_column("S1", no_wrap=True)
+    table.add_column("S2", no_wrap=True)
+    table.add_column("S3", no_wrap=True)
     table.add_column("Balance", justify="right", no_wrap=True)
 
     aps = filter_aps(snapshot.ap_loads, config)
@@ -48,7 +61,10 @@ def build_monitor_table(snapshot: LoadInfoSnapshot, config: APBalanceConfig) -> 
         table.add_row(
             ap.name,
             str(ap.total_clients),
-            render_slot_distribution(ap),
+            render_slot_cell(ap, 0),
+            render_slot_cell(ap, 1),
+            render_slot_cell(ap, 2),
+            render_slot_cell(ap, 3),
             _balance_text(score),
             style=style,
         )
@@ -56,14 +72,17 @@ def build_monitor_table(snapshot: LoadInfoSnapshot, config: APBalanceConfig) -> 
     if snapshot.poll_error or snapshot.parser_warnings:
         table.add_section()
     if snapshot.poll_error:
-        table.add_row("Poll Error", "", snapshot.poll_error, "", style="red")
+        table.add_row("Poll Error", "", snapshot.poll_error, "", "", "", "", style="red")
     for warning in snapshot.parser_warnings[:3]:
-        table.add_row("Warning", "", warning, "", style="yellow")
+        table.add_row("Warning", "", warning, "", "", "", "", style="yellow")
     if len(snapshot.parser_warnings) > 3:
         table.add_row(
             "Warning",
             "",
             f"{len(snapshot.parser_warnings) - 3} additional parser warnings hidden",
+            "",
+            "",
+            "",
             "",
             style="yellow",
         )
@@ -87,5 +106,5 @@ def _balance_text(score: BalanceScore) -> str:
     else:
         ratio = f"{score.ratio:.1f}:1".replace(".0:1", ":1")
     if score.status == "INSUFFICIENT_DATA":
-        return score.status
-    return f"{score.status} {ratio} spread {score.spread}"
+        return "NO DATA"
+    return f"{score.status} {ratio} Δ{score.spread}"
