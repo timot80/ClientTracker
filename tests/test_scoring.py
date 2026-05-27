@@ -2,7 +2,8 @@ from ap_radio_monitor.models import APBalanceConfig, APLoad, RadioSlotLoad
 from ap_radio_monitor.scoring import filter_aps, score_ap, sort_rows
 
 
-def make_ap(name, clients):
+def make_ap(name, clients, utilizations=None):
+    utilizations = utilizations or [10 for _ in clients]
     return APLoad(
         name=name,
         radio_mac="0c75.bdb5.6380",
@@ -10,7 +11,7 @@ def make_ap(name, clients):
         slots=len(clients),
         total_clients=sum(value for value in clients if value is not None),
         slot_loads=[
-            RadioSlotLoad(slot=index, clients=value, utilization=10)
+            RadioSlotLoad(slot=index, clients=value, utilization=utilizations[index])
             for index, value in enumerate(clients)
         ],
     )
@@ -47,6 +48,25 @@ def test_score_returns_idle_for_all_zero_clients():
     assert score.ratio is None
 
 
+def test_score_returns_busy_idle_for_zero_clients_with_high_utilization():
+    score = score_ap(
+        make_ap("BUSY-IDLE", [0, 0, 0, None], utilizations=[43, 3, 0, None]),
+        APBalanceConfig(busy_idle_utilization=20),
+    )
+
+    assert score.status == "BUSY-IDLE"
+    assert score.reason == "zero clients with busy channel"
+
+
+def test_score_ignores_unknown_utilization_for_busy_idle():
+    score = score_ap(
+        make_ap("IDLE", [0, 0, None], utilizations=[None, None, None]),
+        APBalanceConfig(busy_idle_utilization=20),
+    )
+
+    assert score.status == "IDLE"
+
+
 def test_score_returns_insufficient_data_for_one_slot():
     assert score_ap(make_ap("ONE", [7, None, None]), APBalanceConfig()).status == "INSUFFICIENT_DATA"
 
@@ -60,7 +80,13 @@ def test_slot_filters_limit_comparable_slots():
 
 
 def test_sort_rows_places_imbalanced_first():
-    aps = [make_ap("OK", [10, 12]), make_ap("BAD", [1, 50]), make_ap("WARN", [4, 14])]
+    aps = [
+        make_ap("OK", [10, 12]),
+        make_ap("BAD", [1, 50]),
+        make_ap("BUSY", [0, 0], utilizations=[30, 0]),
+        make_ap("WARN", [4, 14]),
+        make_ap("IDLE", [0, 0], utilizations=[0, 0]),
+    ]
     rows = sort_rows([(ap, score_ap(ap, APBalanceConfig())) for ap in aps])
 
-    assert [ap.name for ap, _score in rows] == ["BAD", "WARN", "OK"]
+    assert [ap.name for ap, _score in rows] == ["BAD", "BUSY", "WARN", "OK", "IDLE"]

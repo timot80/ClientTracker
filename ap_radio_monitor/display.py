@@ -9,6 +9,7 @@ from ap_radio_monitor.scoring import filter_aps, score_ap, sort_rows
 
 STATUS_STYLES = {
     "IMBALANCED": "red",
+    "BUSY-IDLE": "yellow",
     "WARNING": "yellow",
     "OK": "green",
     "IDLE": "dim",
@@ -54,10 +55,12 @@ def build_monitor_table(snapshot: LoadInfoSnapshot, config: APBalanceConfig) -> 
 
     aps = filter_aps(snapshot.ap_loads, config)
     rows = [(ap, score_ap(ap, config)) for ap in aps]
-    if config.only_imbalanced:
-        rows = [(ap, score) for ap, score in rows if score.status == "IMBALANCED"]
+    visible_rows, hidden_by_visibility = _apply_visibility(rows, config)
+    sorted_rows = sort_rows(visible_rows)
+    displayed_rows = sorted_rows[: config.limit]
+    hidden_by_limit = sorted_rows[config.limit :]
 
-    for ap, score in sort_rows(rows):
+    for ap, score in displayed_rows:
         style = STATUS_STYLES.get(score.status, "")
         table.add_row(
             ap.name,
@@ -70,8 +73,11 @@ def build_monitor_table(snapshot: LoadInfoSnapshot, config: APBalanceConfig) -> 
             style=style,
         )
 
-    if snapshot.poll_error or snapshot.parser_warnings:
+    hidden_lines = _hidden_summary_lines(hidden_by_visibility, hidden_by_limit)
+    if snapshot.poll_error or snapshot.parser_warnings or hidden_lines:
         table.add_section()
+    for line in hidden_lines:
+        table.add_row("Summary", "", line, "", "", "", "", style="dim")
     if snapshot.poll_error:
         table.add_row("Poll Error", "", snapshot.poll_error, "", "", "", "", style="red")
     for warning in snapshot.parser_warnings[:3]:
@@ -89,7 +95,7 @@ def build_monitor_table(snapshot: LoadInfoSnapshot, config: APBalanceConfig) -> 
         )
 
     last_poll = snapshot.timestamp.strftime("%H:%M:%S")
-    title = f"Last {last_poll} | {len(aps)} APs | AP Radio"
+    title = f"Last {last_poll} | {len(aps)} APs | Showing {len(displayed_rows)}/{len(aps)} | AP Radio"
     return Panel(table, title=title, border_style="cyan", expand=False)
 
 
@@ -111,4 +117,44 @@ def _balance_text(score: BalanceScore) -> str:
         return "NO DATA"
     if score.status == "IDLE":
         return "IDLE"
+    if score.status == "BUSY-IDLE":
+        return "BUSY-IDLE"
     return f"{score.status} {ratio} Δ{score.spread}"
+
+
+def _apply_visibility(
+    rows: list[tuple[APLoad, BalanceScore]], config: APBalanceConfig
+) -> tuple[list[tuple[APLoad, BalanceScore]], list[tuple[APLoad, BalanceScore]]]:
+    if config.only_imbalanced:
+        visible = [(ap, score) for ap, score in rows if score.status == "IMBALANCED"]
+    elif config.only_problem:
+        problem_statuses = {"IMBALANCED", "BUSY-IDLE", "WARNING", "INSUFFICIENT_DATA"}
+        visible = [(ap, score) for ap, score in rows if score.status in problem_statuses]
+    elif config.hide_idle and not config.show_idle:
+        visible = [(ap, score) for ap, score in rows if score.status != "IDLE"]
+    else:
+        visible = list(rows)
+    visible_ids = {id(ap) for ap, _score in visible}
+    hidden = [(ap, score) for ap, score in rows if id(ap) not in visible_ids]
+    return visible, hidden
+
+
+def _hidden_summary_lines(
+    hidden_by_visibility: list[tuple[APLoad, BalanceScore]],
+    hidden_by_limit: list[tuple[APLoad, BalanceScore]],
+) -> list[str]:
+    lines = []
+    if hidden_by_visibility:
+        lines.append(f"Hidden by filter: {_format_status_counts(hidden_by_visibility)}")
+    if hidden_by_limit:
+        lines.append(f"Hidden by limit: {_format_status_counts(hidden_by_limit)}")
+    return lines
+
+
+def _format_status_counts(rows: list[tuple[APLoad, BalanceScore]]) -> str:
+    counts: dict[str, int] = {}
+    for _ap, score in rows:
+        label = "NO DATA" if score.status == "INSUFFICIENT_DATA" else score.status
+        counts[label] = counts.get(label, 0) + 1
+    order = ["IMBALANCED", "BUSY-IDLE", "WARNING", "NO DATA", "OK", "IDLE"]
+    return ", ".join(f"{counts[status]} {status}" for status in order if status in counts)

@@ -11,12 +11,35 @@ def test_version_import_is_available():
 
 
 def test_parse_args_supports_monitor_options():
-    args = parse_radio_args(["--config", "lab.yaml", "--refresh", "15", "--once", "--only-imbalanced"])
+    args = parse_radio_args(
+        [
+            "--config",
+            "lab.yaml",
+            "--refresh",
+            "15",
+            "--once",
+            "--only-imbalanced",
+            "--limit",
+            "10",
+            "--busy-idle-util",
+            "25",
+        ]
+    )
 
     assert args.config == "lab.yaml"
     assert args.refresh == 15
     assert args.once is True
     assert args.only_imbalanced is True
+    assert args.limit == 10
+    assert args.busy_idle_util == 25
+
+
+def test_parse_args_rejects_conflicting_radio_visibility_options():
+    with pytest.raises(SystemExit):
+        parse_radio_args(["--only-imbalanced", "--only-problem"])
+
+    with pytest.raises(SystemExit):
+        parse_radio_args(["--show-idle", "--hide-idle"])
 
 
 def test_main_returns_clean_error_for_bad_config(tmp_path, capsys):

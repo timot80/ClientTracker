@@ -6,7 +6,8 @@ from ap_radio_monitor.display import build_monitor_table, render_slot_cell, rend
 from ap_radio_monitor.models import APBalanceConfig, APLoad, LoadInfoSnapshot, RadioSlotLoad
 
 
-def make_ap(name, clients):
+def make_ap(name, clients, utilizations=None):
+    utilizations = utilizations or [10 for _ in clients]
     return APLoad(
         name=name,
         radio_mac="0c75.bdb5.6380",
@@ -14,7 +15,7 @@ def make_ap(name, clients):
         slots=len(clients),
         total_clients=sum(value for value in clients if value is not None),
         slot_loads=[
-            RadioSlotLoad(slot=index, clients=value, utilization=10)
+            RadioSlotLoad(slot=index, clients=value, utilization=utilizations[index])
             for index, value in enumerate(clients)
         ],
     )
@@ -112,6 +113,40 @@ def test_build_monitor_table_renders_idle_for_zero_client_ap():
 
     assert "IDLE" in rendered
     assert "NO DATA" not in rendered
+
+
+def test_build_monitor_table_limits_rows_and_reports_hidden_counts():
+    aps = [make_ap(f"AP-{index}", [1, 1]) for index in range(4)]
+    snapshot = LoadInfoSnapshot(ap_loads=aps)
+    console = Console(record=True, width=120)
+
+    console.print(build_monitor_table(snapshot, APBalanceConfig(limit=2)))
+    rendered = console.export_text()
+
+    assert "Showing 2/4" in rendered
+    assert "Hidden by limit: 2 OK" in rendered
+    assert "AP-0" in rendered
+    assert "AP-1" in rendered
+    assert "AP-2" not in rendered
+
+
+def test_build_monitor_table_only_problem_keeps_busy_idle_and_hides_idle():
+    snapshot = LoadInfoSnapshot(
+        ap_loads=[
+            make_ap("BUSY-IDLE", [0, 0], utilizations=[25, 0]),
+            make_ap("IDLE-AP", [0, 0], utilizations=[0, 0]),
+            make_ap("OK-AP", [2, 2]),
+        ]
+    )
+    console = Console(record=True, width=120)
+
+    console.print(build_monitor_table(snapshot, APBalanceConfig(only_problem=True)))
+    rendered = console.export_text()
+
+    assert "BUSY-IDLE" in rendered
+    assert "IDLE-AP" not in rendered
+    assert "OK-AP" not in rendered
+    assert "Hidden by filter:" in rendered
 
 
 def test_build_monitor_table_renders_parser_warning_and_poll_error():

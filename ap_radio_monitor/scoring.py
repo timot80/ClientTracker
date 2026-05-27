@@ -7,10 +7,11 @@ from ap_radio_monitor.models import APBalanceConfig, APLoad, BalanceScore
 
 SEVERITY_ORDER = {
     "IMBALANCED": 0,
-    "WARNING": 1,
-    "OK": 2,
-    "IDLE": 3,
-    "INSUFFICIENT_DATA": 4,
+    "BUSY-IDLE": 1,
+    "WARNING": 2,
+    "INSUFFICIENT_DATA": 3,
+    "OK": 4,
+    "IDLE": 5,
 }
 
 
@@ -30,12 +31,12 @@ def score_ap(ap: APLoad, config: APBalanceConfig) -> BalanceScore:
     comparable = _comparable_clients(ap, config)
     if ap.total_clients < config.min_total_clients:
         if comparable and all(value == 0 for value in comparable):
-            return BalanceScore(status="IDLE", reason="zero clients")
+            return _zero_client_score(ap, config)
         return BalanceScore(status="INSUFFICIENT_DATA", reason="below minimum clients")
     if len(comparable) < 2:
         return BalanceScore(status="INSUFFICIENT_DATA", reason="fewer than two comparable slots")
     if not any(value > 0 for value in comparable):
-        return BalanceScore(status="IDLE", reason="zero clients")
+        return _zero_client_score(ap, config)
 
     max_clients = max(comparable)
     min_clients = min(comparable)
@@ -83,6 +84,7 @@ def sort_rows(rows: list[tuple[APLoad, BalanceScore]]) -> list[tuple[APLoad, Bal
         rows,
         key=lambda row: (
             SEVERITY_ORDER.get(row[1].status, 99),
+            -_max_utilization(row[0]),
             -row[1].spread,
             -(row[1].ratio or 0),
             row[0].name,
@@ -105,3 +107,19 @@ def _comparable_clients(ap: APLoad, config: APBalanceConfig) -> list[int]:
             continue
         values.append(slot.clients)
     return values
+
+
+def _zero_client_score(ap: APLoad, config: APBalanceConfig) -> BalanceScore:
+    utilizations = [
+        slot.utilization
+        for slot in ap.slot_loads
+        if slot.clients == 0 and slot.utilization is not None
+    ]
+    if any(utilization >= config.busy_idle_utilization for utilization in utilizations):
+        return BalanceScore(status="BUSY-IDLE", reason="zero clients with busy channel")
+    reason = "zero clients" if utilizations else "zero clients, utilization unknown"
+    return BalanceScore(status="IDLE", reason=reason)
+
+
+def _max_utilization(ap: APLoad) -> int:
+    return max((slot.utilization for slot in ap.slot_loads if slot.utilization is not None), default=0)

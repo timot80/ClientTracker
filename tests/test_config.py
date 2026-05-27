@@ -22,6 +22,8 @@ wlc:
     assert config.wlc.enable == ""
     assert config.ap_balance.refresh_seconds == 30
     assert config.ap_balance.ratio_threshold == 10
+    assert config.ap_balance.limit == 75
+    assert config.ap_balance.busy_idle_utilization == 20
 
 
 def test_load_radio_config_reads_ap_balance_options(tmp_path):
@@ -39,7 +41,11 @@ ap_balance:
   included_slots: [1, 2]
   excluded_slots: [0]
   only_imbalanced: true
+  only_problem: true
+  show_idle: true
   min_total_clients: 5
+  busy_idle_utilization: 25
+  limit: 10
   imbalance:
     ratio_threshold: 8
     min_difference: 12
@@ -54,6 +60,10 @@ ap_balance:
     assert config.ap_balance.include == ("NOC-*",)
     assert config.ap_balance.excluded_slots == (0,)
     assert config.ap_balance.include_zero_client_slots is False
+    assert config.ap_balance.only_problem is True
+    assert config.ap_balance.show_idle is True
+    assert config.ap_balance.limit == 10
+    assert config.ap_balance.busy_idle_utilization == 25
 
 
 def test_load_radio_config_requires_wlc_credentials(tmp_path):

@@ -21,7 +21,12 @@ class APBalanceConfig:
     included_slots: tuple[int, ...] = ()
     excluded_slots: tuple[int, ...] = ()
     only_imbalanced: bool = False
+    only_problem: bool = False
+    show_idle: bool = False
+    hide_idle: bool = False
+    limit: int = 75
     min_total_clients: int = 1
+    busy_idle_utilization: int = 20
     ratio_threshold: float = 10.0
     min_difference: int = 20
     include_zero_client_slots: bool = True

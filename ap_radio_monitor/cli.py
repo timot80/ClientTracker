@@ -20,10 +20,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="Path to config.yaml")
     parser.add_argument("--refresh", type=int, help="Live refresh interval in seconds")
     parser.add_argument("--once", action="store_true", help="Print one snapshot and exit")
-    parser.add_argument(
+    visibility = parser.add_mutually_exclusive_group()
+    visibility.add_argument(
         "--only-imbalanced",
         action="store_true",
+        default=None,
         help="Only show APs currently scored as imbalanced",
+    )
+    visibility.add_argument(
+        "--only-problem",
+        action="store_true",
+        default=None,
+        help="Only show imbalanced, busy-idle, warning, and no-data APs",
+    )
+    idle = parser.add_mutually_exclusive_group()
+    idle.add_argument("--show-idle", action="store_true", default=None, help="Show clean idle APs")
+    idle.add_argument("--hide-idle", action="store_true", default=None, help="Hide clean idle APs")
+    parser.add_argument("--limit", type=int, help="Maximum AP rows to display")
+    parser.add_argument(
+        "--busy-idle-util",
+        type=int,
+        help="Utilization threshold for zero-client APs to show BUSY-IDLE",
     )
     return parser.parse_args(argv)
 
@@ -40,6 +57,11 @@ def main(argv: list[str] | None = None) -> int:
         app_config.ap_balance,
         refresh=args.refresh,
         only_imbalanced=args.only_imbalanced,
+        only_problem=args.only_problem,
+        show_idle=args.show_idle,
+        hide_idle=args.hide_idle,
+        limit=args.limit,
+        busy_idle_utilization=args.busy_idle_util,
     )
 
     from ap_radio_monitor.app import run_live, run_once
@@ -61,7 +83,14 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _override_balance_config(
-    config: APBalanceConfig, refresh: int | None, only_imbalanced: bool
+    config: APBalanceConfig,
+    refresh: int | None,
+    only_imbalanced: bool | None,
+    only_problem: bool | None,
+    show_idle: bool | None,
+    hide_idle: bool | None,
+    limit: int | None,
+    busy_idle_utilization: int | None,
 ) -> APBalanceConfig:
     return APBalanceConfig(
         refresh_seconds=refresh if refresh is not None else config.refresh_seconds,
@@ -69,8 +98,17 @@ def _override_balance_config(
         exclude=config.exclude,
         included_slots=config.included_slots,
         excluded_slots=config.excluded_slots,
-        only_imbalanced=only_imbalanced or config.only_imbalanced,
+        only_imbalanced=config.only_imbalanced if only_imbalanced is None else only_imbalanced,
+        only_problem=config.only_problem if only_problem is None else only_problem,
+        show_idle=config.show_idle if show_idle is None else show_idle,
+        hide_idle=config.hide_idle if hide_idle is None else hide_idle,
+        limit=limit if limit is not None else config.limit,
         min_total_clients=config.min_total_clients,
+        busy_idle_utilization=(
+            busy_idle_utilization
+            if busy_idle_utilization is not None
+            else config.busy_idle_utilization
+        ),
         ratio_threshold=config.ratio_threshold,
         min_difference=config.min_difference,
         include_zero_client_slots=config.include_zero_client_slots,
