@@ -42,6 +42,11 @@ Credential profiles are named shared logins. A profile can include:
 - `password`
 - optional `enable` secret
 
+`config.yaml` is the profile index and source of truth for profile names,
+usernames, and keyring references. The OS keyring stores secret values only.
+The implementation must not rely on portable keyring enumeration because Python
+`keyring` does not provide that across all backends.
+
 Example:
 
 ```yaml
@@ -139,6 +144,16 @@ ap:<username>:enable
 
 The explicit keyring reference string in YAML should map to the key name. The implementation may accept either a full `wifiops:<key>` string or just the key name, but documentation should prefer the explicit `wifiops:<key>` form.
 
+Profile names must match:
+
+```text
+^[A-Za-z0-9_.-]+$
+```
+
+This keeps key names portable and avoids ambiguous separators. Invalid profile
+names should be rejected by credential commands and config loading when a
+profile reference is used.
+
 ## WifiOps Commands
 
 Add credential commands under `wifiops credentials`.
@@ -146,18 +161,45 @@ Add credential commands under `wifiops credentials`.
 Initial commands:
 
 ```bash
-wifiops credentials set-profile c9800-admin
+wifiops credentials set-profile c9800-admin --username netops-admin
 wifiops credentials show-profiles
 wifiops credentials delete-profile c9800-admin
 ```
 
-`set-profile` prompts for:
+All credential commands accept:
 
-- username
+```bash
+--config config.yaml
+```
+
+When omitted, they use the same default repo-local `config.yaml` path as the
+current tools.
+
+`set-profile` writes or updates `credentials.profiles.<name>` in `config.yaml`
+and stores secret values in keyring. It prompts for:
+
 - password, hidden input
 - enable secret, hidden input and optional
 
 The command should print where the profile was stored without echoing secrets.
+It should preserve unrelated config keys when writing the file.
+
+After `set-profile`, the operator still chooses which devices use the profile
+by setting `credential_profile` under `wlc`, `ap`, or future `wlcs` entries:
+
+```yaml
+wlc:
+  host: "wlc-a.example.com"
+  credential_profile: "c9800-admin"
+```
+
+`show-profiles` lists profile names and usernames from `config.yaml`. It must
+not try to enumerate the OS keyring.
+
+`delete-profile` removes the profile entry from `config.yaml` and deletes the
+known password and enable keys for that profile from keyring. It should not
+remove `credential_profile` references from device sections automatically;
+instead it should report that those references may now be invalid.
 
 Later optional commands:
 
@@ -181,6 +223,15 @@ Responsibilities:
 - Return plain dataclass values to the existing WLC and AP connection code.
 
 `client_tracker.config` and `ap_radio_monitor.config` should both call the shared resolver.
+
+The shared resolver should raise a typed exception, such as
+`CredentialConfigError`, for missing profiles, malformed references, missing
+keyring dependencies, unavailable keyring backends, and missing required
+credential values. Existing CLIs may adapt that exception to their current
+behavior:
+
+- `client_tracker.cli` can continue exiting with a clear message.
+- `ap_radio_monitor.cli` can continue returning exit code `1` after printing a clear message.
 
 Legacy root shims should work automatically because they delegate to package CLIs. They should not grow separate credential behavior.
 
@@ -218,6 +269,18 @@ If no usable OS keyring backend is available, credential setup and lookup should
 
 Credential commands must never print password or enable secret values.
 
+Because OS keyrings are normally user-scoped, documentation and error messages
+should prefer this macOS pattern for local telemetry:
+
+```bash
+sudo -v
+wifiops client local
+```
+
+Do not recommend running all of `wifiops` under sudo. If a user runs an
+infrastructure command under sudo, keyring lookup may search root's keyring
+instead of the operator user's keyring.
+
 ## Testing
 
 Tests should mock the keyring backend and avoid touching the real OS credential store.
@@ -230,7 +293,15 @@ Coverage should include:
 - Credential profiles resolve WLC and AP credentials.
 - Missing profile produces a useful error.
 - `wifiops credentials set-profile` stores expected key names without echoing secrets.
+- `wifiops credentials show-profiles` reads profile names from config, not keyring enumeration.
+- `wifiops credentials delete-profile` removes the config profile and known keyring entries.
 - `ap_radio_monitor.config` and `client_tracker.config` both use shared resolution semantics.
+
+## Dependencies
+
+Add `keyring` to runtime project dependencies in `pyproject.toml` and to
+`requirements.txt` so editable installs and local development install the same
+credential-store support.
 
 ## Documentation
 
