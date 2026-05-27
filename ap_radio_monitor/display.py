@@ -15,8 +15,8 @@ STATUS_STYLES = {
 }
 
 
-def render_slot_distribution(ap: APLoad, width: int = 16) -> str:
-    """Render per-slot client counts as compact relative text bars."""
+def render_slot_distribution(ap: APLoad, width: int = 8) -> str:
+    """Render per-slot client counts as readable multi-line relative bars."""
     numeric_clients = [slot.clients for slot in ap.slot_loads if slot.clients is not None]
     max_clients = max(numeric_clients, default=0)
     parts = []
@@ -26,17 +26,17 @@ def render_slot_distribution(ap: APLoad, width: int = 16) -> str:
             continue
         util = "--" if slot.utilization is None else f"{slot.utilization}%"
         bar = _bar(slot.clients, max_clients, width)
-        parts.append(f"S{slot.slot} {slot.clients} cl / {util} util {bar}")
-    return " | ".join(parts)
+        parts.append(f"S{slot.slot} {slot.clients:>2} cl  {util:>3} util  {bar}")
+    return "\n".join(parts)
 
 
 def build_monitor_table(snapshot: LoadInfoSnapshot, config: APBalanceConfig) -> Panel:
     """Build the Rich renderable for one monitor snapshot."""
     table = Table(expand=True)
-    table.add_column("AP Name", overflow="fold")
-    table.add_column("Clients", justify="right")
-    table.add_column("Radio Client Distribution", overflow="fold")
-    table.add_column("Balance", justify="right")
+    table.add_column("AP Name", no_wrap=True)
+    table.add_column("Clients", justify="right", no_wrap=True)
+    table.add_column("Radio Slots", overflow="fold", ratio=3)
+    table.add_column("Balance", justify="right", no_wrap=True)
 
     aps = filter_aps(snapshot.ap_loads, config)
     rows = [(ap, score_ap(ap, config)) for ap in aps]

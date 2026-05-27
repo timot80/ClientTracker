@@ -23,10 +23,20 @@ def test_render_slot_distribution_uses_relative_bars_and_na_marker():
 
     rendered = render_slot_distribution(ap, width=12)
 
-    assert "S0 1 cl / 10% util" in rendered
-    assert "S1 50 cl / 10% util" in rendered
+    assert "S0  1 cl  10% util" in rendered
+    assert "S1 50 cl  10% util" in rendered
     assert "S2 --" in rendered
     assert "████" in rendered
+
+
+def test_render_slot_distribution_uses_one_line_per_slot():
+    ap = make_ap("NOC-AP-1", [2, 2, 1, None])
+
+    rendered = render_slot_distribution(ap, width=12)
+
+    assert rendered.count("\n") == 3
+    assert "S0  2 cl  10% util" in rendered
+    assert "S3 --" in rendered
 
 
 def test_build_monitor_table_renders_parser_warning_and_poll_error():
