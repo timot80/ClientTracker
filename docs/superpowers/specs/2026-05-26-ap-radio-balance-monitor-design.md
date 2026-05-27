@@ -39,7 +39,7 @@ python ap_radio_monitor.py --only-imbalanced
 python ap_radio_monitor.py --only-problem
 python ap_radio_monitor.py --show-idle
 python ap_radio_monitor.py --hide-idle
-python ap_radio_monitor.py --limit 30
+python ap_radio_monitor.py --limit 75
 python ap_radio_monitor.py --busy-idle-util 20
 python ap_radio_monitor.py --config config.yaml
 ```
@@ -85,7 +85,7 @@ ap_balance:
   only_problem: false
   show_idle: false
   hide_idle: false
-  limit: 30
+  limit: 75
   min_total_clients: 1
   busy_idle_utilization: 20
   imbalance:
@@ -105,7 +105,7 @@ Defaults:
 - `only_problem`: `false`
 - `show_idle`: `false`
 - `hide_idle`: `false`
-- `limit`: `30`
+- `limit`: `75`
 - `min_total_clients`: `1`
 - `busy_idle_utilization`: `20`
 - `ratio_threshold`: `10`
@@ -257,7 +257,7 @@ Default large-list behavior:
 Default display is a compact Rich live table with one AP per row:
 
 ```text
-Last 16:08:12 | 71 APs | Showing 30 | AP Radio
+Last 16:08:12 | 71 APs | Showing 71 | AP Radio
 
 AP                         Cli  S0      S1      S2      S3  Balance
 NOC-AP-MBY-1                 9  2c 4%   1c 3%   6c 1%   --  WARNING 6:1 Δ6
