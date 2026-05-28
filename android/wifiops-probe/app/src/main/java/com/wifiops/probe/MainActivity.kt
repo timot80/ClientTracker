@@ -163,16 +163,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun deleteSession(sessionId: String) {
+        if (pairingPayload?.sessionId == sessionId) {
+            stopProbeService()
+            pairingPayload = null
+            showingHistory = false
+        }
         lifecycleScope.launch {
             withContext(Dispatchers.IO) {
                 val dao = database.probeRecordDao()
                 dao.deleteRecordsForSession(sessionId)
                 dao.deleteSession(sessionId)
-            }
-            if (pairingPayload?.sessionId == sessionId) {
-                stopProbeService()
-                pairingPayload = null
-                showingHistory = false
             }
             refreshSessionHistory()
         }
