@@ -33,7 +33,7 @@ data class TelemetryPayload(
     val rssi: Int? = null,
     @SerialName("frequency_mhz")
     val frequencyMhz: Int? = null,
-    val channel: Int? = null,
+    val channel: String? = null,
     @SerialName("tx_link_mbps")
     val txLinkMbps: Int? = null,
     @SerialName("rx_link_mbps")
@@ -42,5 +42,5 @@ data class TelemetryPayload(
     val ipv4Address: String? = null,
     val gateway: String? = null,
     val dns: List<String> = emptyList(),
-    val availability: Map<String, Boolean> = emptyMap()
+    val availability: Map<String, String> = emptyMap()
 )

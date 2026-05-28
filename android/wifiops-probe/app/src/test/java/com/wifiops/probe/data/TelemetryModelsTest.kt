@@ -17,7 +17,12 @@ class TelemetryModelsTest {
             clientTimestamp = "2026-05-27T14:05:31-07:00",
             appVersion = "0.1.0",
             androidApiLevel = 35,
-            payload = TelemetryPayload(ssid = "corp-wifi", rssi = -63)
+            payload = TelemetryPayload(
+                ssid = "corp-wifi",
+                rssi = -63,
+                channel = "36",
+                availability = mapOf("ssid" to "unavailable_or_redacted")
+            )
         )
 
         val json = Json.encodeToString(TelemetryRecord.serializer(), record)
@@ -25,6 +30,8 @@ class TelemetryModelsTest {
         assertEquals(true, json.contains("\"schema_version\":1"))
         assertEquals(true, json.contains("\"session_id\":\"walk_1\""))
         assertEquals(true, json.contains("\"rssi\":-63"))
+        assertEquals(true, json.contains("\"channel\":\"36\""))
+        assertEquals(true, json.contains("\"ssid\":\"unavailable_or_redacted\""))
     }
 
     @Test
