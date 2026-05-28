@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -37,36 +38,38 @@ class AndroidCSVLogger:
         write_header = not self.path.exists() or self.path.stat().st_size == 0
         self._file = self.path.open("a", encoding="utf-8", newline="")
         self._writer = csv.DictWriter(self._file, fieldnames=ANDROID_CSV_COLUMNS)
+        self._lock = threading.Lock()
         if write_header:
             self._writer.writeheader()
 
     def write_record(self, record: AndroidTelemetryRecord, status: str):
         payload = record.payload
         probes = payload.get("probes")
-        self._writer.writerow(
-            {
-                "session_id": record.session_id,
-                "device_id": record.device_id,
-                "record_id": record.record_id,
-                "sequence_number": record.sequence_number,
-                "record_type": record.record_type,
-                "client_timestamp": record.client_timestamp,
-                "status": status,
-                "local_ssid": _string(payload.get("ssid")),
-                "local_bssid": _string(payload.get("bssid")),
-                "local_channel": _string(payload.get("channel") or payload.get("frequency_mhz")),
-                "local_signal": _string(payload.get("rssi")),
-                "local_ipv4_address": _string(payload.get("ipv4_address")),
-                "gateway": _string(payload.get("gateway")),
-                "probe_gateway": _probe_cell(probes, "gateway"),
-                "probe_dns": _probe_cell(probes, "dns"),
-                "probe_http": _probe_cell(probes, "http"),
-                "event_type": _string(payload.get("event_type")),
-                "event_message": _string(payload.get("message")),
-                "error": _string(payload.get("error")),
-            }
-        )
-        self._file.flush()
+        with self._lock:
+            self._writer.writerow(
+                {
+                    "session_id": record.session_id,
+                    "device_id": record.device_id,
+                    "record_id": record.record_id,
+                    "sequence_number": record.sequence_number,
+                    "record_type": record.record_type,
+                    "client_timestamp": record.client_timestamp,
+                    "status": status,
+                    "local_ssid": _string(payload.get("ssid")),
+                    "local_bssid": _string(payload.get("bssid")),
+                    "local_channel": _string(payload.get("channel") or payload.get("frequency_mhz")),
+                    "local_signal": _string(payload.get("rssi")),
+                    "local_ipv4_address": _string(payload.get("ipv4_address")),
+                    "gateway": _string(payload.get("gateway")),
+                    "probe_gateway": _probe_cell(probes, "gateway"),
+                    "probe_dns": _probe_cell(probes, "dns"),
+                    "probe_http": _probe_cell(probes, "http"),
+                    "event_type": _string(payload.get("event_type")),
+                    "event_message": _string(payload.get("message")),
+                    "error": _string(payload.get("error")),
+                }
+            )
+            self._file.flush()
 
     def close(self):
         self._file.close()

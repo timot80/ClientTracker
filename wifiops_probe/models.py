@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Literal
 
 RecordType = Literal["sample", "event"]
@@ -80,6 +81,7 @@ def _parse_record(record: Any) -> AndroidTelemetryRecord:
         raise TelemetryValidationError("invalid_android_api_level", "android_api_level must be an integer")
     if not isinstance(record["payload"], dict):
         raise TelemetryValidationError("invalid_payload", "payload must be an object")
+    _validate_timestamp(record["client_timestamp"])
     return AndroidTelemetryRecord(
         schema_version=record["schema_version"],
         session_id=record["session_id"],
@@ -92,3 +94,12 @@ def _parse_record(record: Any) -> AndroidTelemetryRecord:
         app_version=record["app_version"],
         android_api_level=record["android_api_level"],
     )
+
+
+def _validate_timestamp(timestamp: str):
+    if timestamp.endswith("Z"):
+        timestamp = f"{timestamp[:-1]}+00:00"
+    try:
+        datetime.fromisoformat(timestamp)
+    except ValueError:
+        raise TelemetryValidationError("invalid_timestamp", "client_timestamp must be an ISO 8601 timestamp") from None

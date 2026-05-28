@@ -44,6 +44,28 @@ def test_parse_record_batch_accepts_valid_sample():
     assert records[0].payload["ssid"] == "corp-wifi"
 
 
+def test_parse_record_batch_accepts_zulu_client_timestamp():
+    sample = valid_sample()
+    sample["client_timestamp"] = "2026-05-27T21:05:31Z"
+
+    records = parse_record_batch({"records": [sample]})
+
+    assert records[0].client_timestamp == "2026-05-27T21:05:31Z"
+
+
+def test_parse_record_batch_rejects_invalid_client_timestamp():
+    sample = valid_sample()
+    sample["client_timestamp"] = "not-a-timestamp"
+
+    try:
+        parse_record_batch({"records": [sample]})
+    except TelemetryValidationError as exc:
+        assert exc.code == "invalid_timestamp"
+        assert "client_timestamp" in exc.message
+    else:
+        raise AssertionError("expected TelemetryValidationError")
+
+
 def test_parse_record_batch_rejects_missing_records_array():
     try:
         parse_record_batch({"record": valid_sample()})
