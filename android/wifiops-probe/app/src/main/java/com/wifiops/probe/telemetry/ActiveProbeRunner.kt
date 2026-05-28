@@ -1,5 +1,6 @@
 package com.wifiops.probe.telemetry
 
+import android.net.Network
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -8,7 +9,6 @@ import java.net.HttpURLConnection
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.URI
-import java.net.Socket
 import kotlin.system.measureTimeMillis
 
 data class ProbeResult(
@@ -23,12 +23,17 @@ class ActiveProbeRunner(
     suspend fun tcpConnect(
         host: String,
         port: Int,
-        timeoutMs: Int = 1000
+        timeoutMs: Int = 1000,
+        network: Network? = null
     ): ProbeResult {
+        if (network == null) {
+            return ProbeResult(ok = false, detail = NO_WIFI_NETWORK)
+        }
+
         return try {
             val latencyMs = withContext(ioDispatcher) {
                 measureTimeMillis {
-                    Socket().use { socket ->
+                    network.socketFactory.createSocket().use { socket ->
                         socket.connect(InetSocketAddress(host, port), timeoutMs)
                     }
                 }
@@ -41,12 +46,19 @@ class ActiveProbeRunner(
         }
     }
 
-    suspend fun dnsLookup(hostname: String): ProbeResult {
+    suspend fun dnsLookup(
+        hostname: String,
+        network: Network? = null
+    ): ProbeResult {
+        if (network == null) {
+            return ProbeResult(ok = false, detail = NO_WIFI_NETWORK)
+        }
+
         var addresses = emptyArray<InetAddress>()
         return try {
             val latencyMs = withContext(ioDispatcher) {
                 measureTimeMillis {
-                    addresses = InetAddress.getAllByName(hostname)
+                    addresses = network.getAllByName(hostname)
                 }
             }
             ProbeResult(
@@ -63,15 +75,20 @@ class ActiveProbeRunner(
 
     suspend fun httpGet(
         url: String,
-        timeoutMs: Int = 2000
+        timeoutMs: Int = 2000,
+        network: Network? = null
     ): ProbeResult {
+        if (network == null) {
+            return ProbeResult(ok = false, detail = NO_WIFI_NETWORK)
+        }
+
         var responseCode = -1
         return try {
             val latencyMs = withContext(ioDispatcher) {
                 measureTimeMillis {
                     var connection: HttpURLConnection? = null
                     try {
-                        connection = URI(url).toURL().openConnection() as HttpURLConnection
+                        connection = network.openConnection(URI(url).toURL()) as HttpURLConnection
                         connection.requestMethod = "GET"
                         connection.connectTimeout = timeoutMs
                         connection.readTimeout = timeoutMs
@@ -92,5 +109,9 @@ class ActiveProbeRunner(
         } catch (error: Exception) {
             ProbeResult(ok = false, detail = error.message.orEmpty())
         }
+    }
+
+    private companion object {
+        const val NO_WIFI_NETWORK = "no_wifi_network"
     }
 }

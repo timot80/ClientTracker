@@ -1,33 +1,40 @@
 package com.wifiops.probe.telemetry
 
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Runnable
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
-import kotlin.coroutines.CoroutineContext
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ActiveProbeRunnerTest {
     @Test
-    fun dnsLookupPropagatesCancellationFromIoDispatcher() = runTest {
-        val runner = ActiveProbeRunner(CancellingDispatcher)
+    fun tcpConnectReturnsNoWifiNetworkWhenNetworkIsMissing() = runTest {
+        val runner = ActiveProbeRunner()
 
-        val thrown = try {
-            runner.dnsLookup("example.com")
-            null
-        } catch (error: Throwable) {
-            error
-        }
+        val result = runner.tcpConnect("example.com", 443, network = null)
 
-        assertTrue(thrown is CancellationException)
+        assertFalse(result.ok)
+        assertEquals("no_wifi_network", result.detail)
     }
 
-    private object CancellingDispatcher : CoroutineDispatcher() {
-        override fun dispatch(context: CoroutineContext, block: Runnable) {
-            throw CancellationException("cancelled")
-        }
+    @Test
+    fun dnsLookupReturnsNoWifiNetworkWhenNetworkIsMissing() = runTest {
+        val runner = ActiveProbeRunner()
+
+        val result = runner.dnsLookup("example.com", network = null)
+
+        assertFalse(result.ok)
+        assertEquals("no_wifi_network", result.detail)
+    }
+
+    @Test
+    fun httpGetReturnsNoWifiNetworkWhenNetworkIsMissing() = runTest {
+        val runner = ActiveProbeRunner()
+
+        val result = runner.httpGet("https://example.com", network = null)
+
+        assertFalse(result.ok)
+        assertEquals("no_wifi_network", result.detail)
     }
 }

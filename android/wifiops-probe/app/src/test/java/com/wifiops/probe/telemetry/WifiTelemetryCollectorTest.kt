@@ -6,6 +6,20 @@ import org.junit.Test
 
 class WifiTelemetryCollectorTest {
     @Test
+    fun selectWifiNetworkReturnsFirstWifiCandidate() {
+        val result = selectWifiNetwork(arrayOf("cellular", "wifi", "vpn")) { it == "wifi" }
+
+        assertEquals("wifi", result)
+    }
+
+    @Test
+    fun selectWifiNetworkReturnsNullWhenNoWifiCandidateExists() {
+        val result = selectWifiNetwork(arrayOf("cellular", "vpn")) { false }
+
+        assertNull(result)
+    }
+
+    @Test
     fun channelFromFrequencyHandlesFiveGhz() {
         assertEquals("36", channelFromFrequency(5180))
     }

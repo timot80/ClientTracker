@@ -1,6 +1,8 @@
 package com.wifiops.probe.telemetry
 
 import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import com.wifiops.probe.data.TelemetryPayload
 import java.net.Inet4Address
@@ -17,14 +19,28 @@ fun channelFromFrequency(frequencyMhz: Int?): String? {
     }
 }
 
+fun wifiNetwork(connectivityManager: ConnectivityManager): Network? {
+    return selectWifiNetwork(connectivityManager.allNetworks) { network ->
+        connectivityManager.getNetworkCapabilities(network)
+            ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+    }
+}
+
+internal fun <T> selectWifiNetwork(
+    candidates: Array<T>,
+    hasWifiTransport: (T) -> Boolean
+): T? {
+    return candidates.firstOrNull(hasWifiTransport)
+}
+
 class WifiTelemetryCollector(
     private val wifiManager: WifiManager,
     private val connectivityManager: ConnectivityManager
 ) {
     fun collect(): TelemetryPayload {
         val wifiInfo = wifiManager.connectionInfo
-        val activeNetwork = connectivityManager.activeNetwork
-        val linkProperties = activeNetwork?.let(connectivityManager::getLinkProperties)
+        val network = wifiNetwork(connectivityManager)
+        val linkProperties = network?.let(connectivityManager::getLinkProperties)
         val availability = linkedMapOf<String, String>()
 
         val ssid = wifiInfo?.ssid.redactedSsid()
@@ -72,7 +88,7 @@ class WifiTelemetryCollector(
             ?.gateway
             ?.hostAddress
         if (gateway == null) {
-            availability["gateway"] = "unavailable"
+            availability["gateway"] = if (network == null) "no_wifi_network" else "unavailable"
         }
 
         val dns = linkProperties
@@ -80,7 +96,7 @@ class WifiTelemetryCollector(
             ?.mapNotNull { it.hostAddress }
             .orEmpty()
         if (dns.isEmpty()) {
-            availability["dns"] = "unavailable"
+            availability["dns"] = if (network == null) "no_wifi_network" else "unavailable"
         }
 
         val ipv4Address = linkProperties
