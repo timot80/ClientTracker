@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import socket
 import threading
 from http.client import HTTPConnection
 
@@ -150,3 +151,30 @@ def test_records_endpoint_rejects_body_larger_than_limit():
 
     assert response.status == 413
     assert body["error"] == "body_too_large"
+
+
+def test_records_endpoint_rejects_negative_content_length():
+    server, _thread = start_server()
+    raw_response = b""
+
+    try:
+        with socket.create_connection(("127.0.0.1", server.server_port), timeout=2) as sock:
+            body = sample_body("r1").encode("utf-8")
+            request = (
+                b"POST /api/v1/sessions/walk_1/records HTTP/1.1\r\n"
+                b"Host: 127.0.0.1\r\n"
+                b"Authorization: Bearer secret\r\n"
+                b"Content-Type: application/json\r\n"
+                b"Content-Length: -1\r\n"
+                b"\r\n"
+                + body
+            )
+            sock.sendall(request)
+            sock.shutdown(socket.SHUT_WR)
+            raw_response = sock.makefile("rb").read()
+    finally:
+        stop_server(server)
+
+    headers, response_body = raw_response.split(b"\r\n\r\n", 1)
+    assert headers.startswith(b"HTTP/1.0 400")
+    assert json.loads(response_body)["error"] == "invalid_content_length"

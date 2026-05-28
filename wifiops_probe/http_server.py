@@ -48,6 +48,9 @@ class ProbeRequestHandler(BaseHTTPRequestHandler):
         except ValueError:
             self._json(400, {"error": "invalid_content_length"})
             return
+        if length < 0:
+            self._json(400, {"error": "invalid_content_length"})
+            return
         if length > MAX_BODY_BYTES:
             self._json(413, {"error": "body_too_large"})
             return
