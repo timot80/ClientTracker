@@ -296,6 +296,27 @@ ap_ports:
   speed_threshold: 1000
 ```
 
+Multi-WLC AP port audits can use `wlcs:`:
+
+```yaml
+wlcs:
+  - name: mby-1
+    host: 10.0.0.10
+    credential_profile: c9800-admin
+  - name: mby-2
+    host: 10.0.0.11
+    credential_profile: c9800-admin
+```
+
+With `wlcs:` configured, `wifiops c9800 ap-ports --config config.yaml` runs all
+WLCs by default. Use `--wlc NAME` to target one or more controllers:
+
+```bash
+wifiops c9800 ap-ports --config config.yaml --wlc mby-1
+wifiops c9800 ap-ports --config config.yaml --wlc mby-1 --wlc mby-2
+wifiops c9800 ap-ports --config config.yaml --wlc-concurrency 5
+```
+
 ## Example Output
 
 ```

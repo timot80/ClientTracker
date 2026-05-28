@@ -9,6 +9,19 @@ wlc:
   host: "192.0.2.10"
   credential_profile: "c9800-admin"
 
+# Multi-WLC-aware commands such as `wifiops c9800 ap-ports` use `wlcs:`
+# when present. Keep `wlc:` for commands that still target a single WLC.
+wifiops:
+  wlc_concurrency: 3
+
+wlcs:
+  - name: "mby-1"
+    host: "192.0.2.10"
+    credential_profile: "c9800-admin"
+  - name: "mby-2"
+    host: "192.0.2.11"
+    credential_profile: "c9800-admin"
+
 ap:
   credential_profile: "c9800-admin"
 
