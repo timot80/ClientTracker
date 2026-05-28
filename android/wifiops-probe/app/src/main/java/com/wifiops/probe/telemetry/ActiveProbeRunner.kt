@@ -5,6 +5,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -31,14 +32,22 @@ class ActiveProbeRunner(
         }
 
         return try {
+            var failureDetail: String? = null
             val latencyMs = withContext(ioDispatcher) {
                 measureTimeMillis {
-                    network.socketFactory.createSocket().use { socket ->
-                        socket.connect(InetSocketAddress(host, port), timeoutMs)
+                    val addresses = network.getAllByName(host)
+                    failureDetail = connectFirstResolvedAddress(addresses, port) { socketAddress ->
+                        network.socketFactory.createSocket().use { socket ->
+                            socket.connect(socketAddress, timeoutMs)
+                        }
                     }
                 }
             }
-            ProbeResult(ok = true, latencyMs = latencyMs)
+            if (failureDetail == null) {
+                ProbeResult(ok = true, latencyMs = latencyMs)
+            } else {
+                ProbeResult(ok = false, latencyMs = latencyMs, detail = failureDetail.orEmpty())
+            }
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
@@ -114,4 +123,26 @@ class ActiveProbeRunner(
     private companion object {
         const val NO_WIFI_NETWORK = "no_wifi_network"
     }
+}
+
+internal fun connectFirstResolvedAddress(
+    addresses: Array<InetAddress>,
+    port: Int,
+    connect: (InetSocketAddress) -> Unit
+): String? {
+    if (addresses.isEmpty()) {
+        return "no_resolved_addresses"
+    }
+
+    var lastError: IOException? = null
+    for (address in addresses) {
+        try {
+            connect(InetSocketAddress(address, port))
+            return null
+        } catch (error: IOException) {
+            lastError = error
+        }
+    }
+
+    return lastError?.message ?: "connect_failed"
 }
