@@ -25,6 +25,8 @@ ANDROID_CSV_COLUMNS = (
     "probe_dns",
     "probe_http",
     "event_type",
+    "event_message",
+    "error",
 )
 
 
@@ -60,8 +62,11 @@ class AndroidCSVLogger:
                 "probe_dns": _probe_cell(probes, "dns"),
                 "probe_http": _probe_cell(probes, "http"),
                 "event_type": _string(payload.get("event_type")),
+                "event_message": _string(payload.get("message")),
+                "error": _string(payload.get("error")),
             }
         )
+        self._file.flush()
 
     def close(self):
         self._file.close()

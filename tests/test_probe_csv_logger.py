@@ -30,3 +30,34 @@ def test_android_csv_logger_writes_probe_columns(tmp_path):
     assert rows[0]["session_id"] == "walk_1"
     assert rows[0]["record_id"] == "r1"
     assert rows[0]["local_ssid"] == "corp-wifi"
+
+
+def test_android_csv_logger_writes_event_diagnostics_and_flushes(tmp_path):
+    path = tmp_path / "probe.csv"
+    logger = AndroidCSVLogger(path)
+    logger.write_record(
+        AndroidTelemetryRecord(
+            schema_version=1,
+            session_id="walk_1",
+            device_id="android_1",
+            record_id="r2",
+            sequence_number=8,
+            record_type="event",
+            client_timestamp="2026-05-27T14:05:32-07:00",
+            app_version="0.1.0",
+            android_api_level=35,
+            payload={
+                "event_type": "upload-failed",
+                "message": "receiver unavailable",
+                "error": "HTTP 503",
+            },
+        ),
+        status="accepted",
+    )
+
+    rows = list(csv.DictReader(path.open(encoding="utf-8")))
+    logger.close()
+
+    assert rows[0]["event_type"] == "upload-failed"
+    assert rows[0]["event_message"] == "receiver unavailable"
+    assert rows[0]["error"] == "HTTP 503"

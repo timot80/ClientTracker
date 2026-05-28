@@ -22,7 +22,7 @@ def local_state_from_record(record: AndroidTelemetryRecord) -> LocalClientState:
         ipv4_router=_string(payload.get("gateway")),
         ping_status=_probe_summary(payload.get("probes")),
         platform="android",
-        timestamp=datetime.now(),
+        timestamp=_record_timestamp(record),
     )
 
 
@@ -32,13 +32,13 @@ def event_from_record(record: AndroidTelemetryRecord) -> TrackerEvent | None:
 
     payload = record.payload
     event_type = payload.get("event_type")
-    now = datetime.now()
+    timestamp = _record_timestamp(record)
 
     if event_type == "bssid-change":
         previous_bssid = _string(payload.get("previous_bssid"))
         current_bssid = _string(payload.get("current_bssid"))
         return TrackerEvent(
-            timestamp=now,
+            timestamp=timestamp,
             source="local",
             type="bssid-change",
             message=f"Android BSSID changed from {previous_bssid} to {current_bssid}",
@@ -50,7 +50,7 @@ def event_from_record(record: AndroidTelemetryRecord) -> TrackerEvent | None:
     if event_type == "disassociated":
         previous_bssid = _string(payload.get("previous_bssid") or payload.get("bssid"))
         return TrackerEvent(
-            timestamp=now,
+            timestamp=timestamp,
             source="local",
             type="disassociated",
             message="Android client disassociated",
@@ -59,7 +59,7 @@ def event_from_record(record: AndroidTelemetryRecord) -> TrackerEvent | None:
     if event_type == "associated":
         current_bssid = _string(payload.get("current_bssid") or payload.get("bssid"))
         return TrackerEvent(
-            timestamp=now,
+            timestamp=timestamp,
             source="local",
             type="associated",
             message=f"Android client associated to {current_bssid}",
@@ -69,14 +69,14 @@ def event_from_record(record: AndroidTelemetryRecord) -> TrackerEvent | None:
         )
     if event_type == "session-started":
         return TrackerEvent(
-            timestamp=now,
+            timestamp=timestamp,
             source="system",
             type="startup",
             message="Android probe session started",
         )
     if event_type == "session-stopped":
         return TrackerEvent(
-            timestamp=now,
+            timestamp=timestamp,
             source="system",
             type="shutdown",
             message="Android probe session stopped",
@@ -84,7 +84,7 @@ def event_from_record(record: AndroidTelemetryRecord) -> TrackerEvent | None:
     if event_type in ("probe-failed", "upload-failed"):
         error = _string(payload.get("error") or payload.get("message"))
         return TrackerEvent(
-            timestamp=now,
+            timestamp=timestamp,
             source="local",
             type="poll-error",
             message=error or _string(event_type),
@@ -92,7 +92,7 @@ def event_from_record(record: AndroidTelemetryRecord) -> TrackerEvent | None:
         )
     if event_type in ("probe-recovered", "upload-recovered"):
         return TrackerEvent(
-            timestamp=now,
+            timestamp=timestamp,
             source="local",
             type="poll-recovered",
             message=_string(payload.get("message")) or _string(event_type),
@@ -104,6 +104,16 @@ def _string(value: Any) -> str:
     if value is None:
         return ""
     return str(value)
+
+
+def _record_timestamp(record: AndroidTelemetryRecord) -> datetime:
+    timestamp = record.client_timestamp
+    if timestamp.endswith("Z"):
+        timestamp = f"{timestamp[:-1]}+00:00"
+    try:
+        return datetime.fromisoformat(timestamp)
+    except ValueError:
+        return datetime.now()
 
 
 def _probe_summary(probes: Any) -> str:
