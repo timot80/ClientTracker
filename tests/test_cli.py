@@ -97,3 +97,11 @@ def test_interval_can_be_overridden():
     args = parse_client_args(["--mode", "local", "--interval", "0.5"])
 
     assert args.interval == 0.5
+
+
+def test_client_tracker_accepts_repeatable_wlc_selection():
+    args = parse_client_args(
+        ["aa:bb:cc:dd:ee:ff", "--wlc", "mby-1", "--wlc", "mby-2"]
+    )
+
+    assert args.wlc == ["mby-1", "mby-2"]

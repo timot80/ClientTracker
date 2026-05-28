@@ -30,6 +30,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--log", help="Optional CSV log path")
     parser.add_argument("--config", default=str(CONFIG_PATH), help="Path to config.yaml")
+    parser.add_argument("--wlc", action="append", default=[], help="Named WLC to include; repeatable")
     parser.add_argument(
         "--interval",
         type=float,
@@ -55,7 +56,7 @@ def main(argv: list[str] | None = None):
     args = parse_args(argv)
     require_infra = args.mode in ("infra", "combined") and not args.check
     config_path = pathlib.Path(args.config)
-    config = load_config(config_path, require_infra=require_infra)
+    config = load_config(config_path, require_infra=require_infra, wlc_names=tuple(args.wlc))
     if args.check:
         print("Python dependencies import successfully.")
         if config_path.exists():

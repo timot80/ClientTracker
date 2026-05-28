@@ -220,6 +220,16 @@ Infrastructure mode tracks a client through the WLC and associated AP:
 ```bash
 python client_tracker.py aa:bb:cc:dd:ee:ff
 python client_tracker.py aa:bb:cc:dd:ee:ff --mode infra
+wifiops c9800 client aa:bb:cc:dd:ee:ff
+```
+
+When `wlcs:` is configured, `wifiops c9800 client` searches all configured
+controllers by default and uses the controller where the client is found for
+AP IP lookup. Use repeatable `--wlc NAME` options to limit the search:
+
+```bash
+wifiops c9800 client aa:bb:cc:dd:ee:ff --wlc mby-1
+wifiops c9800 client aa:bb:cc:dd:ee:ff --wlc mby-1 --wlc mby-2
 ```
 
 Local mode shows Wi-Fi telemetry from the machine running the script:
@@ -234,6 +244,7 @@ Combined mode shows infrastructure and local telemetry together:
 ```bash
 sudo -v
 python client_tracker.py aa:bb:cc:dd:ee:ff --mode combined
+wifiops c9800 client aa:bb:cc:dd:ee:ff --mode combined
 ```
 
 Polling defaults are mode-specific: local mode updates every 1 second, combined mode every 2 seconds, and infrastructure mode every 5 seconds. Override with `--interval`:

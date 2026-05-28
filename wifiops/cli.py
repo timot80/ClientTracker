@@ -100,6 +100,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Track a wireless client from Catalyst 9800 infrastructure.",
     )
     c9800_client.add_argument("mac", help="Wireless client MAC address")
+    c9800_client.add_argument("--config", help="Path to config.yaml")
     c9800_client.add_argument(
         "--mode",
         choices=("infra", "combined"),
@@ -108,6 +109,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     c9800_client.add_argument("--log", help="Optional CSV log path")
     c9800_client.add_argument("--interval", type=float, help="Polling interval in seconds")
+    c9800_client.add_argument("--wlc", action="append", default=[], help="Named WLC to include; repeatable")
 
     ap = subcommands.add_parser("ap", help="Access point tools")
     ap_subcommands = ap.add_subparsers(dest="ap_command", required=True)
@@ -179,8 +181,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.mode == "combined" and not _macos_sudo_ready():
             return _macos_sudo_error()
         translated = [args.mac, "--mode", args.mode]
-        if default_config_arg():
+        if args.config:
+            translated.extend(["--config", args.config])
+        elif default_config_arg():
             translated.extend(default_config_arg())
+        for wlc_name in args.wlc:
+            translated.extend(["--wlc", wlc_name])
         if args.interval is not None:
             translated.extend(["--interval", _format_number(args.interval)])
         if args.log is not None:

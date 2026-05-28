@@ -59,6 +59,7 @@ class WLCSession:
                 raise RuntimeError(
                     "WLC did not enter enable mode; check wlc.enable in config.yaml"
                 )
+        self._send("terminal length 0")
         self._fetch_hostname()
 
     def _fetch_hostname(self):
@@ -104,11 +105,32 @@ class WLCSession:
         return self.parse_client_detail(output, mac)
 
     def get_ap_ip(self, ap_name: str) -> str:
+        output = self._send_with_retry(f"show ap name {ap_name} config general | include IP")
+        ip = self.parse_ap_config_general_ip(output)
+        if ip:
+            return ip
         output = self._send_with_retry("show ap summary")
+        return self.parse_ap_summary_ip(output, ap_name)
+
+    @staticmethod
+    def parse_ap_config_general_ip(output: str) -> str:
+        for line in output.splitlines():
+            key, separator, raw_value = line.partition(":")
+            if not separator:
+                continue
+            if key.strip() != "IP Address":
+                continue
+            match = re.search(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b", raw_value)
+            if match:
+                return match.group(1)
+        return ""
+
+    @staticmethod
+    def parse_ap_summary_ip(output: str, ap_name: str) -> str:
         for line in output.splitlines():
             fields = line.split()
             if fields and fields[0] == ap_name:
-                match = re.search(r"(\d{1,3}(?:\.\d{1,3}){3})", line)
+                match = re.search(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b", line)
                 if match:
                     return match.group(1)
         return ""
@@ -187,7 +209,7 @@ class APSessionPool:
             tokens = line.split()
             if len(tokens) < 6:
                 break
-            state.channel = tokens[3]
+            state.slot_id = tokens[1]
             rssi_idx = next(
                 (
                     i

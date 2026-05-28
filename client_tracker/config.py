@@ -9,6 +9,7 @@ from typing import Any
 import yaml
 
 from wifiops.credentials import CredentialConfigError, ResolvedCredentials, resolve_credentials
+from wifiops.wlc_targets import WlcTargetConfigError, resolve_wlc_targets, select_wlc_targets
 
 
 @dataclass
@@ -17,6 +18,12 @@ class WLCConfig:
     username: str = ""
     password: str = ""
     enable: str = ""
+
+
+@dataclass
+class WlcClientTarget:
+    name: str
+    config: WLCConfig
 
 
 @dataclass
@@ -36,6 +43,7 @@ class LocalConfig:
 @dataclass
 class AppConfig:
     wlc: WLCConfig
+    wlc_targets: list[WlcClientTarget]
     ap: APConfig
     local: LocalConfig
 
@@ -63,7 +71,11 @@ AP_CREDENTIAL_ENV = {
 }
 
 
-def load_config(path: str | Path, require_infra: bool) -> AppConfig:
+def load_config(
+    path: str | Path,
+    require_infra: bool,
+    wlc_names: tuple[str, ...] = (),
+) -> AppConfig:
     path = Path(path)
     data: dict[str, Any] = {}
     if path.exists():
@@ -78,26 +90,41 @@ def load_config(path: str | Path, require_infra: bool) -> AppConfig:
     if "CLIENT_TRACKER_WLC_HOST" in os.environ:
         data.setdefault("wlc", {})["host"] = os.environ["CLIENT_TRACKER_WLC_HOST"]
 
-    wlc_data = data.get("wlc", {}) or {}
     ap_data = data.get("ap", {}) or {}
     local_data = data.get("local", {}) or {}
     if require_infra:
         try:
-            wlc_credentials = resolve_credentials(data, "wlc", os.environ, WLC_CREDENTIAL_ENV)
             ap_credentials = resolve_credentials(data, "ap", os.environ, AP_CREDENTIAL_ENV)
+            resolved_targets = select_wlc_targets(resolve_wlc_targets(data), wlc_names)
         except CredentialConfigError as exc:
             sys.exit(str(exc))
+        except WlcTargetConfigError as exc:
+            sys.exit(str(exc))
     else:
-        wlc_credentials = ResolvedCredentials()
         ap_credentials = ResolvedCredentials()
+        resolved_targets = []
+
+    wlc_targets = [
+        WlcClientTarget(
+            name=target.name,
+            config=WLCConfig(
+                host=target.config.host,
+                username=target.config.username,
+                password=target.config.password,
+                enable=target.config.enable,
+            ),
+        )
+        for target in resolved_targets
+    ]
+    if wlc_targets:
+        wlc = wlc_targets[0].config
+    else:
+        wlc_data = data.get("wlc", {}) or {}
+        wlc = WLCConfig(host=str(wlc_data.get("host", "")))
 
     cfg = AppConfig(
-        wlc=WLCConfig(
-            host=str(wlc_data.get("host", "")),
-            username=wlc_credentials.username,
-            password=wlc_credentials.password,
-            enable=wlc_credentials.enable,
-        ),
+        wlc=wlc,
+        wlc_targets=wlc_targets,
         ap=APConfig(
             username=ap_credentials.username,
             password=ap_credentials.password,
@@ -111,12 +138,14 @@ def load_config(path: str | Path, require_infra: bool) -> AppConfig:
     )
     if require_infra:
         missing = []
-        if not cfg.wlc.host:
-            missing.append("wlc.host")
-        if not cfg.wlc.username:
-            missing.append("wlc.username")
-        if not cfg.wlc.password:
-            missing.append("wlc.password")
+        for target in cfg.wlc_targets:
+            prefix = f"wlcs[{target.name}]" if len(cfg.wlc_targets) > 1 else "wlc"
+            if not target.config.host:
+                missing.append(f"{prefix}.host")
+            if not target.config.username:
+                missing.append(f"{prefix}.username")
+            if not target.config.password:
+                missing.append(f"{prefix}.password")
         if not cfg.ap.username:
             missing.append("ap.username")
         if not cfg.ap.password:

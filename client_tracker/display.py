@@ -67,7 +67,7 @@ class LiveDisplay:
             title = f"AP Client Stats ([white]{state.ap_name}[/white])"
             tbl.add_row(
                 f"Live RSSI: [cyan]{state.rssi or 'N/A'} dBm[/cyan]    "
-                f"Rate: {state.mcs_rate or 'N/A'}    Ch: {state.channel or 'N/A'}"
+                f"Rate: {state.mcs_rate or 'N/A'}    Slot: {state.slot_id or 'N/A'}"
             )
             ts = state.timestamp.strftime("%H:%M:%S") if state.timestamp else ""
             tbl.add_row(f"Updated: {ts}")

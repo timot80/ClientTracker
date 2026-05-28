@@ -9,7 +9,7 @@ from pathlib import Path
 from netmiko.exceptions import NetmikoAuthenticationException, NetmikoTimeoutException
 from rich.live import Live
 
-from .config import AppConfig
+from .config import AppConfig, WlcClientTarget
 from .display import LiveDisplay
 from .events import CSVLogger, EventTimeline
 from .infra import APSessionPool, WLCSession
@@ -94,6 +94,8 @@ class ClientTrackerApp:
         self.timeline = EventTimeline()
         self.logger = CSVLogger(log_path) if log_path else None
         self.wlc: WLCSession | None = None
+        self.wlc_sessions: list[tuple[WlcClientTarget, WLCSession]] = []
+        self.active_wlc_name = ""
         self.ap_pool: APSessionPool | None = None
         self.local_poller: LocalTelemetryPoller | None = None
         self.wlc_state: WLCClientState | None = None
@@ -125,22 +127,27 @@ class ClientTrackerApp:
 
     def _setup(self):
         if self.mode in ("infra", "combined"):
-            self.wlc = WLCSession(
-                self.config.wlc.host,
-                self.config.wlc.username,
-                self.config.wlc.password,
-                self.config.wlc.enable,
-            )
+            targets = self.config.wlc_targets or [WlcClientTarget("default", self.config.wlc)]
             self.ap_pool = APSessionPool(
                 self.config.ap.username,
                 self.config.ap.password,
                 self.config.ap.enable,
             )
-            try:
-                self.wlc.connect()
-            except (NetmikoAuthenticationException, NetmikoTimeoutException) as exc:
-                print(f"Failed to connect to WLC: {exc}")
-                sys.exit(1)
+            for target in targets:
+                session = WLCSession(
+                    target.config.host,
+                    target.config.username,
+                    target.config.password,
+                    target.config.enable,
+                )
+                try:
+                    session.connect()
+                except (NetmikoAuthenticationException, NetmikoTimeoutException) as exc:
+                    print(f"Failed to connect to WLC {target.name} ({target.config.host}): {exc}")
+                    sys.exit(1)
+                self.wlc_sessions.append((target, session))
+            if self.wlc_sessions:
+                self.wlc = self.wlc_sessions[0][1]
         if self.mode in ("local", "combined"):
             self.local_poller = LocalTelemetryPoller(
                 ping_host=self.config.local.ping_host,
@@ -149,21 +156,36 @@ class ClientTrackerApp:
             )
 
     def _poll_wlc(self):
-        if self.wlc is None:
+        if not self.wlc_sessions:
             return
-        try:
-            state = self.wlc.get_client_state(self.mac)
-            self.wlc_error = ""
-        except Exception as exc:
-            self.wlc_error = str(exc)
-            self._append_event(TrackerEvent(datetime.now(), "infra", "poll-error", self.wlc_error, error=self.wlc_error))
-            return
-        if state is None:
+        errors = []
+        found_session: WLCSession | None = None
+        found_target: WlcClientTarget | None = None
+        state: WLCClientState | None = None
+        for target, session in self.wlc_sessions:
+            try:
+                state = session.get_client_state(self.mac)
+            except Exception as exc:
+                error = f"{target.name}: {exc}"
+                errors.append(error)
+                self._append_event(TrackerEvent(datetime.now(), "infra", "poll-error", error, error=error))
+                continue
+            if state is not None:
+                found_session = session
+                found_target = target
+                break
+        if state is None or found_session is None or found_target is None:
             self.wlc_state = None
+            self.ap_state = None
+            self.ap_error = ""
+            self.wlc_error = "; ".join(errors) if errors and len(errors) == len(self.wlc_sessions) else ""
             return
+        self.wlc = found_session
+        self.active_wlc_name = found_target.name
+        self.wlc_error = ""
         if state.ap_name:
             try:
-                state.ap_ip = self.wlc.get_ap_ip(state.ap_name)
+                state.ap_ip = found_session.get_ap_ip(state.ap_name)
             except Exception:
                 state.ap_ip = ""
         event = detect_infra_roam(self._current_ap, state, self.ap_state)
@@ -241,7 +263,7 @@ class ClientTrackerApp:
 
     def _render(self):
         return self.display.build(
-            wlc_hostname=self.wlc.hostname if self.wlc else "",
+            wlc_hostname=self._wlc_display_name(),
             wlc_state=self.wlc_state,
             ap_state=self.ap_state,
             local_state=self.local_state,
@@ -252,6 +274,14 @@ class ClientTrackerApp:
             mode=self.mode,
         )
 
+    def _wlc_display_name(self) -> str:
+        if self.wlc is None:
+            return ""
+        hostname = self.wlc.hostname or self.wlc.host
+        if self.active_wlc_name:
+            return f"{self.active_wlc_name} ({hostname})"
+        return hostname
+
     def _handle_signal(self, _signum, _frame):
         self._stop = True
 
@@ -259,7 +289,7 @@ class ClientTrackerApp:
         self._append_event(TrackerEvent(datetime.now(), "system", "shutdown", "Shutting down"))
         if self.ap_pool:
             self.ap_pool.shutdown()
-        if self.wlc:
-            self.wlc.disconnect()
+        for _target, session in self.wlc_sessions:
+            session.disconnect()
         if self.logger:
             self.logger.close()

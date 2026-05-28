@@ -325,6 +325,40 @@ def test_c9800_client_preserves_combined_mode_and_interval():
     )
 
 
+def test_c9800_client_preserves_config_and_wlc_selection():
+    client_main = Mock(return_value=None)
+
+    with patch("client_tracker.cli.main", client_main):
+        exit_code = main(
+            [
+                "c9800",
+                "client",
+                "aa:bb:cc:dd:ee:ff",
+                "--config",
+                "config.yaml",
+                "--wlc",
+                "mby-1",
+                "--wlc",
+                "mby-2",
+            ]
+        )
+
+    assert exit_code == 0
+    client_main.assert_called_once_with(
+        [
+            "aa:bb:cc:dd:ee:ff",
+            "--mode",
+            "infra",
+            "--config",
+            "config.yaml",
+            "--wlc",
+            "mby-1",
+            "--wlc",
+            "mby-2",
+        ]
+    )
+
+
 def test_c9800_client_rejects_local_mode():
     with pytest.raises(SystemExit):
         main(["c9800", "client", "aa:bb:cc:dd:ee:ff", "--mode", "local"])

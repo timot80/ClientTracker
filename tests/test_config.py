@@ -68,6 +68,71 @@ def test_load_client_config_resolves_profile_credentials(tmp_path, monkeypatch):
     assert cfg.ap.enable == "profile-enable"
 
 
+def test_load_client_config_resolves_multi_wlc_targets(tmp_path, monkeypatch):
+    _clear_client_tracker_env(monkeypatch)
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        """
+credentials:
+  profiles:
+    c9800-admin:
+      username: "netops-admin"
+      password_keyring: "wifiops:profile:c9800-admin:password"
+wlcs:
+  - name: "mby-1"
+    host: "192.0.2.10"
+    credential_profile: "c9800-admin"
+  - name: "mby-2"
+    host: "192.0.2.11"
+    credential_profile: "c9800-admin"
+ap:
+  credential_profile: "c9800-admin"
+""",
+        encoding="utf-8",
+    )
+    _mock_keyring_get_password(
+        monkeypatch,
+        {
+            "profile:c9800-admin:password": "profile-password",
+        },
+    )
+
+    cfg = load_client_config(path, require_infra=True)
+
+    assert [target.name for target in cfg.wlc_targets] == ["mby-1", "mby-2"]
+    assert [target.config.host for target in cfg.wlc_targets] == ["192.0.2.10", "192.0.2.11"]
+    assert cfg.wlc.host == "192.0.2.10"
+    assert cfg.wlc.username == "netops-admin"
+    assert cfg.wlc.password == "profile-password"
+
+
+def test_load_client_config_selects_named_multi_wlc_targets(tmp_path, monkeypatch):
+    _clear_client_tracker_env(monkeypatch)
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        """
+wlcs:
+  - name: "mby-1"
+    host: "192.0.2.10"
+    username: "admin"
+    password: "secret"
+  - name: "mby-2"
+    host: "192.0.2.11"
+    username: "admin"
+    password: "secret"
+ap:
+  username: "ap-admin"
+  password: "ap-secret"
+""",
+        encoding="utf-8",
+    )
+
+    cfg = load_client_config(path, require_infra=True, wlc_names=("mby-2",))
+
+    assert [target.name for target in cfg.wlc_targets] == ["mby-2"]
+    assert cfg.wlc.host == "192.0.2.11"
+
+
 def test_load_client_config_env_overrides_profile_and_keyring(tmp_path, monkeypatch):
     _clear_client_tracker_env(monkeypatch)
     path = tmp_path / "config.yaml"

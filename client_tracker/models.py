@@ -38,6 +38,7 @@ class APClientState:
     ap_name: str = ""
     rssi: str = ""
     channel: str = ""
+    slot_id: str = ""
     ssid: str = ""
     mcs_rate: str = ""
     timestamp: datetime | None = None
