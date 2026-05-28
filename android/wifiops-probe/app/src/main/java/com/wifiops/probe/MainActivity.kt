@@ -21,6 +21,7 @@ import com.wifiops.probe.service.ProbeForegroundService
 import com.wifiops.probe.ui.PairScreen
 import com.wifiops.probe.ui.SessionHistoryScreen
 import com.wifiops.probe.ui.SessionScreen
+import com.wifiops.probe.ui.SessionSummary
 import com.wifiops.probe.ui.SessionUiState
 
 class MainActivity : ComponentActivity() {
@@ -55,10 +56,22 @@ class MainActivity : ComponentActivity() {
                         )
 
                         showingHistory -> SessionHistoryScreen(
-                            sessions = emptyList(),
+                            sessions = listOf(
+                                SessionSummary(
+                                    sessionId = paired.sessionId,
+                                    receiverUrl = paired.receiverUrl
+                                )
+                            ),
                             onBack = { showingHistory = false },
-                            onExport = { },
-                            onDelete = { }
+                            onExport = {
+                                permissionMessage = "Session export is not available in this build."
+                                showingHistory = false
+                            },
+                            onDelete = {
+                                stopProbeService()
+                                pairingPayload = null
+                                showingHistory = false
+                            }
                         )
 
                         else -> SessionScreen(
@@ -96,10 +109,17 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startProbeService() {
+        val paired = pairingPayload ?: run {
+            permissionMessage = "Pair a receiver before starting."
+            return
+        }
         permissionMessage = null
         ContextCompat.startForegroundService(
             this,
             Intent(this, ProbeForegroundService::class.java)
+                .putExtra(ProbeForegroundService.EXTRA_RECEIVER_URL, paired.receiverUrl)
+                .putExtra(ProbeForegroundService.EXTRA_SESSION_ID, paired.sessionId)
+                .putExtra(ProbeForegroundService.EXTRA_TOKEN, paired.token)
         )
         probeRunning = true
     }
