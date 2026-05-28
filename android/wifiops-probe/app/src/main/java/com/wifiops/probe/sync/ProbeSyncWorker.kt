@@ -6,10 +6,11 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
+import java.io.IOException
 
 class ProbeSyncWorker(
     private val dao: ProbeRecordDao,
-    private val client: ProbeSyncClient
+    private val client: ProbeSyncTransport
 ) {
     suspend fun syncOnce(sessionId: String, receiverUrl: String, token: String): Int {
         val pending = dao.pendingRecords(sessionId, PendingLimit)
@@ -18,6 +19,7 @@ class ProbeSyncWorker(
         }
 
         return try {
+            val pendingIds = pending.mapTo(mutableSetOf()) { it.recordId }
             val acknowledgement = client.upload(
                 receiverUrl = receiverUrl,
                 sessionId = sessionId,
@@ -25,20 +27,39 @@ class ProbeSyncWorker(
                 recordsJson = buildRecordsJson(pending)
             )
 
-            val syncedRecordIds = acknowledgement.accepted + acknowledgement.duplicate
+            val syncedRecordIds = (acknowledgement.accepted + acknowledgement.duplicate)
+                .filter { it in pendingIds }
             syncedRecordIds.forEach { recordId ->
-                dao.updateRecordStatus(recordId, "synced")
+                dao.updatePendingRecordStatus(sessionId, recordId, "synced")
             }
             acknowledgement.rejected.forEach { rejected ->
-                dao.updateRecordStatus(rejected.recordId, "failed", rejected.error)
+                if (rejected.recordId in pendingIds) {
+                    dao.updatePendingRecordStatus(sessionId, rejected.recordId, "failed", rejected.error)
+                }
             }
             syncedRecordIds.size
-        } catch (exception: Exception) {
-            val error = exception.message ?: exception::class.java.simpleName
-            pending.forEach { record ->
-                dao.markRetry(record.recordId, error)
+        } catch (exception: ProbeSyncHttpException) {
+            val error = exception.message ?: "HTTP ${exception.statusCode}"
+            if (exception.isRetryable) {
+                markPendingRetries(sessionId, pending, error)
+            } else {
+                pending.forEach { record ->
+                    dao.updatePendingRecordStatus(sessionId, record.recordId, "failed", error)
+                }
             }
             0
+        } catch (exception: IOException) {
+            markPendingRetries(sessionId, pending, exception.message ?: exception::class.java.simpleName)
+            0
+        } catch (exception: Exception) {
+            markPendingRetries(sessionId, pending, exception.message ?: exception::class.java.simpleName)
+            0
+        }
+    }
+
+    private suspend fun markPendingRetries(sessionId: String, pending: List<RecordEntity>, error: String) {
+        pending.forEach { record ->
+            dao.markPendingRetry(sessionId, record.recordId, error)
         }
     }
 

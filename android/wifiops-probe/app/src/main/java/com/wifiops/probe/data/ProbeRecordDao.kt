@@ -28,19 +28,24 @@ interface ProbeRecordDao {
         """
         UPDATE records
         SET syncStatus = :status, lastError = :lastError
-        WHERE recordId = :recordId
+        WHERE sessionId = :sessionId AND recordId = :recordId AND syncStatus = 'pending'
         """
     )
-    suspend fun updateRecordStatus(recordId: String, status: String, lastError: String = "")
+    suspend fun updatePendingRecordStatus(
+        sessionId: String,
+        recordId: String,
+        status: String,
+        lastError: String = ""
+    )
 
     @Query(
         """
         UPDATE records
         SET retryCount = retryCount + 1, lastError = :lastError
-        WHERE recordId = :recordId
+        WHERE sessionId = :sessionId AND recordId = :recordId AND syncStatus = 'pending'
         """
     )
-    suspend fun markRetry(recordId: String, lastError: String)
+    suspend fun markPendingRetry(sessionId: String, recordId: String, lastError: String)
 
     @Query(
         """

@@ -7,6 +7,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.IOException
 
 @Serializable
 data class RejectedRecord(
@@ -22,7 +23,23 @@ data class ProbeAcknowledgement(
     val rejected: List<RejectedRecord> = emptyList()
 )
 
-class ProbeSyncClient(private val http: OkHttpClient = OkHttpClient()) {
+interface ProbeSyncTransport {
+    fun upload(
+        receiverUrl: String,
+        sessionId: String,
+        token: String,
+        recordsJson: String
+    ): ProbeAcknowledgement
+}
+
+class ProbeSyncHttpException(
+    val statusCode: Int,
+    val responseBody: String
+) : IOException("Upload failed with HTTP $statusCode: $responseBody") {
+    val isRetryable: Boolean = statusCode !in 400..499
+}
+
+class ProbeSyncClient(private val http: OkHttpClient = OkHttpClient()) : ProbeSyncTransport {
     fun health(receiverUrl: String): Boolean {
         val request = Request.Builder()
             .url("${receiverUrl.trimEnd('/')}/health")
@@ -34,7 +51,7 @@ class ProbeSyncClient(private val http: OkHttpClient = OkHttpClient()) {
         }
     }
 
-    fun upload(
+    override fun upload(
         receiverUrl: String,
         sessionId: String,
         token: String,
@@ -49,7 +66,9 @@ class ProbeSyncClient(private val http: OkHttpClient = OkHttpClient()) {
 
         http.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
-            check(response.isSuccessful) { "Upload failed with HTTP ${response.code}: $body" }
+            if (!response.isSuccessful) {
+                throw ProbeSyncHttpException(response.code, body)
+            }
             return parseAcknowledgement(body)
         }
     }
