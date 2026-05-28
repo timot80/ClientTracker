@@ -105,7 +105,8 @@ def build_monitor_table(snapshot: LoadInfoSnapshot, config: APBalanceConfig) -> 
 
 def _add_ap_columns(table: Table, visible_slots: list[int]) -> None:
     table.add_column("AP", no_wrap=True)
-    table.add_column("Cli", justify="right", no_wrap=True)
+    table.add_column("WLC Tot", justify="right", no_wrap=True)
+    table.add_column("Slot Tot", justify="right", no_wrap=True)
     for slot_number in visible_slots:
         table.add_column(f"S{slot_number}", no_wrap=True)
     table.add_column("Balance", justify="right", no_wrap=True)
@@ -119,7 +120,7 @@ def _split_display_rows(
 
 
 def _ap_column_count(visible_slots: list[int]) -> int:
-    return len(visible_slots) + 3
+    return len(visible_slots) + 4
 
 
 def _ap_row_cells(ap: APLoad, score: BalanceScore, visible_slots: list[int]) -> list[Text]:
@@ -127,10 +128,20 @@ def _ap_row_cells(ap: APLoad, score: BalanceScore, visible_slots: list[int]) -> 
     values = [
         ap.name,
         str(ap.total_clients),
+        str(_visible_slot_total(ap, visible_slots)),
         *(render_slot_cell(ap, slot_number) for slot_number in visible_slots),
         _balance_text(score),
     ]
     return [Text(value, style=style) for value in values]
+
+
+def _visible_slot_total(ap: APLoad, visible_slots: list[int]) -> int:
+    visible = set(visible_slots)
+    return sum(
+        slot.clients
+        for slot in ap.slot_loads
+        if slot.slot in visible and slot.clients is not None
+    )
 
 
 def _visible_slot_numbers(config: APBalanceConfig) -> list[int]:
@@ -144,8 +155,8 @@ def _visible_slot_numbers(config: APBalanceConfig) -> list[int]:
 
 def _metadata_row(label: str, message: str, visible_slots: list[int]) -> list[str]:
     if not visible_slots:
-        return [label, "", message]
-    return [label, "", message, *([""] * (len(visible_slots) - 1)), ""]
+        return [label, "", "", message]
+    return [label, "", "", message, *([""] * (len(visible_slots) - 1)), ""]
 
 
 def _wide_metadata_row(label: str, message: str, visible_slots: list[int]) -> list[str]:

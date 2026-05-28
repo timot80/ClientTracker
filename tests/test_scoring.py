@@ -17,6 +17,21 @@ def make_ap(name, clients, utilizations=None):
     )
 
 
+def make_ap_with_wlc_total(name, wlc_total, clients, utilizations=None):
+    utilizations = utilizations or [10 for _ in clients]
+    return APLoad(
+        name=name,
+        radio_mac="0c75.bdb5.6380",
+        identity_label="Radio Mac",
+        slots=len(clients),
+        total_clients=wlc_total,
+        slot_loads=[
+            RadioSlotLoad(slot=index, clients=value, utilization=utilizations[index])
+            for index, value in enumerate(clients)
+        ],
+    )
+
+
 def test_filter_aps_uses_include_and_exclude_patterns():
     aps = [make_ap("NOC-AP-1", [1, 2]), make_ap("LAB-AP-1", [1, 2]), make_ap("NOC-TEST", [1, 2])]
     config = APBalanceConfig(include=("NOC-*",), exclude=("*-TEST",))
@@ -87,6 +102,63 @@ def test_score_ignores_unknown_utilization_for_busy_idle():
 
 def test_score_returns_insufficient_data_for_one_slot():
     assert score_ap(make_ap("ONE", [7, None, None]), APBalanceConfig()).status == "INSUFFICIENT_DATA"
+
+
+def test_score_returns_ok_for_dual_radio_single_reporting_slot_with_clients():
+    score = score_ap(make_ap("ONE-RADIO", [15, None]), APBalanceConfig())
+
+    assert score.status == "OK"
+    assert score.max_clients == 15
+    assert score.min_clients == 15
+    assert score.spread == 0
+    assert score.reason == "single comparable slot"
+
+
+def test_score_uses_slot_total_when_wlc_total_is_zero_but_slots_have_clients():
+    ap = make_ap_with_wlc_total("STALE-WLC-TOTAL", 0, [1, 0, 0])
+
+    score = score_ap(ap, APBalanceConfig())
+
+    assert score.status == "OK"
+    assert score.max_clients == 1
+    assert score.min_clients == 0
+    assert score.spread == 1
+
+
+def test_score_min_clients_uses_filtered_comparable_slot_total():
+    ap = make_ap_with_wlc_total("FILTERED", 50, [50, 0, 0])
+
+    score = score_ap(ap, APBalanceConfig(included_slots=(1, 2), min_total_clients=1))
+
+    assert score.status == "IDLE"
+    assert score.reason == "zero clients"
+
+
+def test_score_min_clients_honors_include_zero_client_slots_false():
+    ap = make_ap_with_wlc_total("ZERO-EXCLUDED", 50, [50, 0, 0])
+
+    score = score_ap(
+        ap,
+        APBalanceConfig(
+            included_slots=(1, 2),
+            min_total_clients=1,
+            include_zero_client_slots=False,
+        ),
+    )
+
+    assert score.status == "INSUFFICIENT_DATA"
+    assert score.reason == "below minimum clients"
+
+
+def test_score_ignores_auto_excluded_none_slots():
+    ap = make_ap_with_wlc_total("AUTO-EXCLUDED", 6, [None, 1, 0])
+
+    score = score_ap(ap, APBalanceConfig(included_slots=(0, 1, 2)))
+
+    assert score.status == "OK"
+    assert score.max_clients == 1
+    assert score.min_clients == 0
+    assert score.spread == 1
 
 
 def test_slot_filters_limit_comparable_slots():

@@ -29,11 +29,21 @@ def filter_aps(aps: list[APLoad], config: APBalanceConfig) -> list[APLoad]:
 def score_ap(ap: APLoad, config: APBalanceConfig) -> BalanceScore:
     """Score radio client distribution for one AP."""
     comparable = _comparable_clients(ap, config)
-    if ap.total_clients < config.min_total_clients:
+    comparable_total = sum(comparable)
+    if comparable_total < config.min_total_clients:
         if comparable and all(value == 0 for value in comparable):
             return _zero_client_score(ap, config)
         return BalanceScore(status="INSUFFICIENT_DATA", reason="below minimum clients")
     if len(comparable) < 2:
+        if ap.slots <= 2 and comparable and any(value > 0 for value in comparable):
+            only_value = comparable[0]
+            return BalanceScore(
+                status="OK",
+                max_clients=only_value,
+                min_clients=only_value,
+                spread=0,
+                reason="single comparable slot",
+            )
         return BalanceScore(status="INSUFFICIENT_DATA", reason="fewer than two comparable slots")
     if not any(value > 0 for value in comparable):
         return _zero_client_score(ap, config)
