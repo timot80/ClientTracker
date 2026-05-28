@@ -1,6 +1,7 @@
 package com.wifiops.probe
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -44,6 +45,7 @@ class MainActivity : ComponentActivity() {
     private var sessionHistory by mutableStateOf<List<SessionSummary>>(emptyList())
     private var sessionCounters by mutableStateOf(TelemetryCounters())
     private var receiverReachable by mutableStateOf<Boolean?>(null)
+    private var savedPairing by mutableStateOf<PairingPayload?>(null)
     private var counterRefreshJob: Job? = null
     private val syncClient = ProbeSyncClient()
 
@@ -64,6 +66,7 @@ class MainActivity : ComponentActivity() {
             ProbeDatabase::class.java,
             "wifiops-probe.db"
         ).build()
+        savedPairing = loadSavedPairing()
         refreshSessionHistory()
         setContent {
             MaterialTheme {
@@ -71,8 +74,11 @@ class MainActivity : ComponentActivity() {
                     val paired = pairingPayload
                     when {
                         paired == null -> PairScreen(
+                            savedPairing = savedPairing,
                             onPaired = {
                                 pairingPayload = it
+                                savedPairing = it
+                                savePairing(it)
                                 sessionCounters = TelemetryCounters()
                                 permissionMessage = null
                                 showingHistory = false
@@ -99,6 +105,7 @@ class MainActivity : ComponentActivity() {
                             onPairDifferentReceiver = {
                                 stopProbeService()
                                 pairingPayload = null
+                                savedPairing = loadSavedPairing()
                                 showingHistory = false
                             },
                             onShowHistory = {
@@ -252,6 +259,25 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    private fun loadSavedPairing(): PairingPayload? {
+        val preferences = getSharedPreferences(PAIRING_PREFS, Context.MODE_PRIVATE)
+        val receiverUrl = preferences.getString(KEY_RECEIVER_URL, "").orEmpty()
+        val sessionId = preferences.getString(KEY_SESSION_ID, "").orEmpty()
+        val token = preferences.getString(KEY_TOKEN, "").orEmpty()
+        return runCatching {
+            PairingPayload.fromManualFields(receiverUrl, sessionId, token)
+        }.getOrNull()
+    }
+
+    private fun savePairing(pairing: PairingPayload) {
+        getSharedPreferences(PAIRING_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_RECEIVER_URL, pairing.receiverUrl)
+            .putString(KEY_SESSION_ID, pairing.sessionId)
+            .putString(KEY_TOKEN, pairing.token)
+            .apply()
+    }
+
     private fun requiredRuntimePermissions(): List<String> {
         return when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> listOf(
@@ -266,5 +292,12 @@ class MainActivity : ComponentActivity() {
 
             else -> emptyList()
         }
+    }
+
+    private companion object {
+        const val PAIRING_PREFS = "pairing"
+        const val KEY_RECEIVER_URL = "receiver_url"
+        const val KEY_SESSION_ID = "session_id"
+        const val KEY_TOKEN = "token"
     }
 }

@@ -30,11 +30,12 @@ import com.wifiops.probe.pairing.PairingPayload
 @Composable
 fun PairScreen(
     modifier: Modifier = Modifier,
+    savedPairing: PairingPayload? = null,
     onPaired: (PairingPayload) -> Unit
 ) {
-    var receiverUrl by remember { mutableStateOf("") }
-    var sessionId by remember { mutableStateOf("") }
-    var token by remember { mutableStateOf("") }
+    var receiverUrl by remember(savedPairing) { mutableStateOf(savedPairing?.receiverUrl.orEmpty()) }
+    var sessionId by remember(savedPairing) { mutableStateOf(savedPairing?.sessionId.orEmpty()) }
+    var token by remember(savedPairing) { mutableStateOf(savedPairing?.token.orEmpty()) }
     var payloadJson by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
 
