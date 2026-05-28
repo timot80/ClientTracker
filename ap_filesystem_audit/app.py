@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import replace
 
 from netmiko import ConnectHandler
@@ -163,15 +164,24 @@ def _maybe_reload_full_tmp(
 
     try:
         output = conn.send_command_timing("reload", read_timeout=30, last_read=3)
-        if "confirm" not in output.lower():
+        if "confirm" not in output.lower() and "proceed with reload" not in output.lower():
             message = f"reload confirmation prompt not received: {output}"
             return (
                 [APReloadResult(**identity, action="failed", output=message)],
                 [APFilesystemFailure(**identity, message=message)],
             )
-        confirm_output = conn.send_command_timing("\r", read_timeout=30, last_read=3)
+        confirm_output = _send_reload_confirmation(conn)
     except Exception as exc:
         message = f"reload failed: {exc}"
+        return (
+            [APReloadResult(**identity, action="failed", output=message)],
+            [APFilesystemFailure(**identity, message=message)],
+        )
+
+    combined_output = "\n".join(part for part in (output, confirm_output) if part)
+    reboot_evidence = combined_output.lower()
+    if not any(marker in reboot_evidence for marker in ("rebooting", "connection closed", "socket")):
+        message = f"reload confirmation sent but no reboot evidence received: {combined_output}"
         return (
             [APReloadResult(**identity, action="failed", output=message)],
             [APFilesystemFailure(**identity, message=message)],
@@ -182,11 +192,33 @@ def _maybe_reload_full_tmp(
             APReloadResult(
                 **identity,
                 action="triggered",
-                output="\n".join(part for part in (output, confirm_output) if part),
+                output=combined_output,
             )
         ],
         [],
     )
+
+
+def _send_reload_confirmation(conn) -> str:
+    if not hasattr(conn, "write_channel") or not hasattr(conn, "read_channel"):
+        return conn.send_command_timing("\r", read_timeout=30, last_read=3)
+
+    conn.write_channel("\r\n")
+    chunks = []
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        time.sleep(0.5)
+        try:
+            chunk = conn.read_channel()
+        except Exception as exc:
+            chunks.append(f"connection closed after confirmation: {exc}")
+            break
+        if chunk:
+            chunks.append(chunk)
+            lowered = chunk.lower()
+            if "rebooting" in lowered or "socket" in lowered:
+                break
+    return "".join(chunks)
 
 
 def _dedupe_ap_targets(targets: list[APTarget]) -> list[APTarget]:

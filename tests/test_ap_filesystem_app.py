@@ -82,6 +82,13 @@ def test_collect_ap_filesystems_reloads_when_tmp_is_full(monkeypatch):
             self.calls.append(("send_command_timing", command))
             if command == "reload":
                 return "Proceed with reload? [confirm]"
+            return ""
+
+        def write_channel(self, value):
+            self.calls.append(("write_channel", value))
+
+        def read_channel(self):
+            self.calls.append(("read_channel", ""))
             return "cli: AP Rebooting: CLI triggered reboot(reload command)"
 
         def disconnect(self):
@@ -101,7 +108,7 @@ def test_collect_ap_filesystems_reloads_when_tmp_is_full(monkeypatch):
     assert len(snapshot.reload_results) == 1
     assert snapshot.reload_results[0].action == "triggered"
     assert ("send_command_timing", "reload") in fake.calls
-    assert ("send_command_timing", "\r") in fake.calls
+    assert ("write_channel", "\r\n") in fake.calls
 
 
 def test_collect_ap_filesystems_does_not_reload_when_only_non_tmp_mount_is_full(monkeypatch):
@@ -164,6 +171,42 @@ def test_collect_ap_filesystems_records_reload_failure_when_confirmation_missing
     assert snapshot.reload_results[0].action == "failed"
     assert snapshot.failures
     assert "confirmation prompt not received" in snapshot.failures[0].message
+
+
+def test_collect_ap_filesystems_records_reload_failure_without_reboot_evidence(monkeypatch):
+    class FakeConnection:
+        def send_command(self, command, **_kwargs):
+            if command == "terminal length 0":
+                return ""
+            return FILESYSTEM_OUTPUT
+
+        def send_command_timing(self, command, **_kwargs):
+            assert command == "reload"
+            return "Proceed with reload? [confirm]"
+
+        def write_channel(self, _value):
+            pass
+
+        def read_channel(self):
+            return ""
+
+        def disconnect(self):
+            pass
+
+    monkeypatch.setattr("ap_filesystem_audit.app.ConnectHandler", lambda **_kwargs: FakeConnection())
+    monkeypatch.setattr("ap_filesystem_audit.app.time.sleep", lambda _seconds: None)
+    target = APTarget("wlc-1", "192.0.2.10", "AP-1", "10.1.2.3")
+
+    snapshot = collect_ap_filesystems(
+        target,
+        APCredentials("u", "p"),
+        APFilesystemAuditConfig(reload_full_tmp=True, confirm_reload_full_tmp=True),
+    )
+
+    assert len(snapshot.reload_results) == 1
+    assert snapshot.reload_results[0].action == "failed"
+    assert snapshot.failures
+    assert "no reboot evidence" in snapshot.failures[0].message
 
 
 def test_run_audit_renders_failures_and_returns_nonzero(monkeypatch):
