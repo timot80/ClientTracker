@@ -317,6 +317,37 @@ wifiops c9800 ap-ports --config config.yaml --wlc mby-1 --wlc mby-2
 wifiops c9800 ap-ports --config config.yaml --wlc-concurrency 5
 ```
 
+### AP Filesystem Audit
+
+Audit AP filesystem usage by discovering APs from configured WLCs, then SSHing
+directly to each AP and running `sh filesystems`:
+
+```bash
+wifiops ap filesystems --config config.yaml
+wifiops ap filesystems --include "MBY-*"
+wifiops ap filesystems --ap-name MBY-CON-SCC1_BAYSIDE_D-7
+wifiops ap filesystems --min-used-percent 95
+wifiops ap filesystems --output ap-filesystems.csv
+wifiops ap filesystems --all --output ap-filesystems-all.csv
+```
+
+By default, the audit shows only full, high, or unknown filesystem rows. Use
+`--all` for inventory-style output. `--output` writes the same visible rows plus
+failure records to CSV.
+
+Optional defaults:
+
+```yaml
+ap_filesystems:
+  include:
+    - "NOC-*"
+  exclude:
+    - "*-TEST"
+  min_used_percent: 95
+  show_all: false
+  ap_concurrency: 20
+```
+
 ## Example Output
 
 ```
