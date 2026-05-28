@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
+export WIFIOPS_CONFIG="${WIFIOPS_CONFIG:-$APP_DIR/config.yaml}"
+
+if [[ "$#" -gt 0 ]]; then
+  exec "$APP_DIR/.venv/bin/wifiops" "$@"
+fi
+
+echo "WifiOps config: $WIFIOPS_CONFIG"
+"$APP_DIR/.venv/bin/wifiops" credentials show-profiles --config "$WIFIOPS_CONFIG"
+cat <<EOF
+
+To add or update a credential profile:
+  $APP_DIR/bin/wifiops credentials set-profile c9800-admin --username <username> --config "$WIFIOPS_CONFIG"
+EOF

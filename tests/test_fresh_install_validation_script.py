@@ -27,4 +27,10 @@ def test_fresh_install_validator_avoids_source_checkout_imports():
     assert "unset PYTHONPATH" in text
     assert "importlib.util.find_spec" in text
     assert "imported from source checkout instead of wheel" in text
-    assert '"wifiops", "client_tracker", "ap_radio_monitor", "ap_port_audit"' in text
+    assert '"wifiops", "client_tracker", "ap_radio_monitor", "ap_port_audit", "ap_filesystem_audit"' in text
+
+
+def test_fresh_install_validator_checks_ap_filesystem_help():
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    assert '"$VENV_DIR/bin/wifiops" ap filesystems --help' in text

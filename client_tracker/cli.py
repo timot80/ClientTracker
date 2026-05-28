@@ -7,8 +7,9 @@ import sys
 from .app import ClientTrackerApp
 from .config import load_config
 from .infra import is_valid_mac
+from wifiops.config_paths import default_config_path
 
-CONFIG_PATH = pathlib.Path(__file__).resolve().parent.parent / "config.yaml"
+CONFIG_PATH = default_config_path(__file__)
 DEFAULT_INTERVALS = {
     "infra": 5.0,
     "local": 1.0,
@@ -28,6 +29,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Tracking mode. Defaults to infra when MAC is supplied, local otherwise.",
     )
     parser.add_argument("--log", help="Optional CSV log path")
+    parser.add_argument("--config", default=str(CONFIG_PATH), help="Path to config.yaml")
     parser.add_argument(
         "--interval",
         type=float,
@@ -52,13 +54,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None):
     args = parse_args(argv)
     require_infra = args.mode in ("infra", "combined") and not args.check
-    config = load_config(CONFIG_PATH, require_infra=require_infra)
+    config_path = pathlib.Path(args.config)
+    config = load_config(config_path, require_infra=require_infra)
     if args.check:
         print("Python dependencies import successfully.")
-        if CONFIG_PATH.exists():
-            print(f"Config found: {CONFIG_PATH}")
+        if config_path.exists():
+            print(f"Config found: {config_path}")
         else:
-            print(f"Config not found: {CONFIG_PATH}")
+            print(f"Config not found: {config_path}")
         return
     app = ClientTrackerApp(
         args.mode,

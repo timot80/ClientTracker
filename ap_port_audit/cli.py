@@ -4,16 +4,16 @@ import argparse
 import sys
 from collections.abc import Sequence
 from dataclasses import replace
-from pathlib import Path
 
 from rich.console import Console
 
 from ap_port_audit.app import run_multi
 from ap_port_audit.config import load_config
 from wifiops.wlc_targets import select_wlc_targets
+from wifiops.config_paths import default_config_path
 
 
-DEFAULT_CONFIG = Path(__file__).resolve().parent.parent / "config.yaml"
+DEFAULT_CONFIG = default_config_path(__file__)
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:

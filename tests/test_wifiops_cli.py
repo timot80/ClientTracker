@@ -328,6 +328,21 @@ def test_client_local_delegates_to_client_tracker_local_mode():
     )
 
 
+def test_client_local_uses_wifiops_config_env(monkeypatch, tmp_path):
+    config_path = tmp_path / "config.yaml"
+    monkeypatch.setenv("WIFIOPS_CONFIG", str(config_path))
+    client_main = Mock(return_value=None)
+
+    with (
+        patch("wifiops.cli._macos_sudo_ready", return_value=True),
+        patch("client_tracker.cli.main", client_main),
+    ):
+        exit_code = main(["client", "local"])
+
+    assert exit_code == 0
+    client_main.assert_called_once_with(["--mode", "local", "--config", str(config_path)])
+
+
 def test_client_local_exits_before_live_ui_when_macos_sudo_is_not_ready(capsys):
     client_main = Mock(return_value=None)
     sudo_ready = Mock(return_value=False)
@@ -390,3 +405,15 @@ def test_check_delegates_to_client_tracker_check():
 
     assert exit_code == 0
     client_main.assert_called_once_with(["--check"])
+
+
+def test_check_uses_wifiops_config_env(monkeypatch, tmp_path):
+    config_path = tmp_path / "config.yaml"
+    monkeypatch.setenv("WIFIOPS_CONFIG", str(config_path))
+    client_main = Mock(return_value=None)
+
+    with patch("client_tracker.cli.main", client_main):
+        exit_code = main(["check"])
+
+    assert exit_code == 0
+    client_main.assert_called_once_with(["--check", "--config", str(config_path)])

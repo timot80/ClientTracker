@@ -39,6 +39,7 @@ fi
   "$VENV_DIR/bin/wifiops" credentials show-profiles --config "$RUN_DIR/config.yaml"
   "$VENV_DIR/bin/wifiops" c9800 radio --help
   "$VENV_DIR/bin/wifiops" c9800 ap-ports --help
+  "$VENV_DIR/bin/wifiops" ap filesystems --help
   "$VENV_DIR/bin/wifiops" client local --help
   "$VENV_DIR/bin/wifiops" check
 
@@ -50,7 +51,7 @@ import pathlib
 import sys
 
 repo = pathlib.Path(sys.argv[1]).resolve()
-for name in ("wifiops", "client_tracker", "ap_radio_monitor", "ap_port_audit"):
+for name in ("wifiops", "client_tracker", "ap_radio_monitor", "ap_port_audit", "ap_filesystem_audit"):
     spec = importlib.util.find_spec(name)
     if spec is None or spec.origin is None:
         raise SystemExit(f"{name} is not importable from the installed wheel")
