@@ -109,6 +109,25 @@ def build_parser() -> argparse.ArgumentParser:
     c9800_client.add_argument("--log", help="Optional CSV log path")
     c9800_client.add_argument("--interval", type=float, help="Polling interval in seconds")
 
+    ap = subcommands.add_parser("ap", help="Access point tools")
+    ap_subcommands = ap.add_subparsers(dest="ap_command", required=True)
+    filesystems = ap_subcommands.add_parser(
+        "filesystems",
+        help="Audit AP filesystem usage",
+        description="Audit AP filesystem usage by discovering APs through configured WLCs.",
+    )
+    filesystems.add_argument("--config", help="Path to config.yaml")
+    filesystems.add_argument("--wlc", action="append", default=[], help="Named WLC to include; repeatable")
+    filesystems.add_argument("--include", action="append", default=[], help="AP name wildcard to include")
+    filesystems.add_argument("--exclude", action="append", default=[], help="AP name wildcard to exclude")
+    filesystems.add_argument("--ap-name", action="append", default=[], help="Exact AP name to include; repeatable")
+    filesystems.add_argument("--ap-host", action="append", default=[], help="Exact AP IP/host to include; repeatable")
+    filesystems.add_argument("--min-used-percent", type=int, help="Use%% threshold for HIGH status")
+    filesystems.add_argument("--all", action="store_true", help="Show all filesystems, including OK rows")
+    filesystems.add_argument("--wlc-concurrency", type=int, help="Maximum WLCs to query concurrently")
+    filesystems.add_argument("--ap-concurrency", type=int, help="Maximum APs to query concurrently")
+    filesystems.add_argument("--output", help="Optional CSV output path")
+
     client = subcommands.add_parser("client", help="Local client telemetry tools")
     client_subcommands = client.add_subparsers(dest="client_command", required=True)
 
@@ -153,6 +172,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.log is not None:
             translated.extend(["--log", args.log])
         return _exit_code(client_main(translated))
+
+    if args.command == "ap" and args.ap_command == "filesystems":
+        from ap_filesystem_audit.cli import main as filesystems_main
+
+        return _exit_code(filesystems_main(_delegated_args(argv, "filesystems")))
 
     if args.command == "client" and args.client_command == "local":
         from client_tracker.cli import main as client_main

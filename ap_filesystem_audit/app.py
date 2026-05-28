@@ -7,6 +7,7 @@ from rich.console import Console
 
 from ap_filesystem_audit.discovery import discover_aps_from_wlc
 from ap_filesystem_audit.display import build_filesystem_table
+from ap_filesystem_audit.export import write_csv
 from ap_filesystem_audit.models import (
     APCredentials,
     APFilesystemAuditConfig,
@@ -107,6 +108,12 @@ def run_audit(
 
     snapshot = APFilesystemSnapshot(rows=rows, failures=failures, parser_warnings=parser_warnings)
     console.print(build_filesystem_table(snapshot, audit_config))
+    if audit_config.output:
+        try:
+            write_csv(audit_config.output, snapshot, audit_config)
+        except Exception as exc:
+            console.print(f"Failed to write CSV output: {exc}")
+            return 1
     return 1 if failures else 0
 
 

@@ -263,6 +263,16 @@ def test_c9800_ap_ports_preserves_multi_wlc_options():
     port_main.assert_called_once_with(["--wlc", "mby-1", "--wlc", "mby-2", "--wlc-concurrency", "5"])
 
 
+def test_ap_filesystems_delegates_to_ap_filesystem_audit():
+    fs_main = Mock(return_value=0)
+
+    with patch("ap_filesystem_audit.cli.main", fs_main):
+        exit_code = main(["ap", "filesystems", "--config", "config.yaml", "--include", "MBY-*"])
+
+    assert exit_code == 0
+    fs_main.assert_called_once_with(["--config", "config.yaml", "--include", "MBY-*"])
+
+
 def test_c9800_client_defaults_to_infra_mode():
     client_main = Mock(return_value=None)
 

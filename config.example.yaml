@@ -55,3 +55,10 @@ ap_ports:
   exclude: []
   show_all: false
   speed_threshold: 1000
+
+ap_filesystems:
+  include: []
+  exclude: []
+  min_used_percent: 95
+  show_all: false
+  ap_concurrency: 20
