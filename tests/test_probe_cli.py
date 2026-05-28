@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from wifiops_probe.cli import build_parser
+from wifiops_probe.cli import build_parser, format_host_port, is_loopback_host, receiver_url_for_host
 
 
 def test_probe_receive_parser_defaults_to_loopback():
@@ -20,3 +20,14 @@ def test_probe_receive_parser_accepts_log_and_advertise_host():
     assert args.host == "0.0.0.0"
     assert args.advertise_host == "192.0.2.10"
     assert args.log == "walk.csv"
+
+
+def test_receiver_url_brackets_ipv6_literals():
+    assert receiver_url_for_host("2001:db8::10", 8765) == "http://[2001:db8::10]:8765"
+    assert receiver_url_for_host("192.0.2.10", 8765) == "http://192.0.2.10:8765"
+
+
+def test_format_host_port_and_loopback_support_ipv6():
+    assert format_host_port("::1", 8765) == "[::1]:8765"
+    assert is_loopback_host("::1") is True
+    assert is_loopback_host("::") is False

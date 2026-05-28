@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
@@ -14,6 +15,10 @@ class ProbeHTTPServer(ThreadingHTTPServer):
         super().__init__(server_address, RequestHandlerClass)
         self.session = session
         self.csv_logger = csv_logger
+
+
+class ProbeIPv6HTTPServer(ProbeHTTPServer):
+    address_family = socket.AF_INET6
 
 
 class ProbeRequestHandler(BaseHTTPRequestHandler):

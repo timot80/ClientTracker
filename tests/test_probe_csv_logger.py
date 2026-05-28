@@ -33,6 +33,38 @@ def test_android_csv_logger_writes_probe_columns(tmp_path):
     assert rows[0]["local_ssid"] == "corp-wifi"
 
 
+def test_android_csv_logger_writes_ipv6_columns(tmp_path):
+    path = tmp_path / "probe.csv"
+    logger = AndroidCSVLogger(path)
+    logger.write_record(
+        AndroidTelemetryRecord(
+            schema_version=1,
+            session_id="walk_1",
+            device_id="android_1",
+            record_id="r1",
+            sequence_number=7,
+            record_type="sample",
+            client_timestamp="2026-05-27T14:05:31-07:00",
+            app_version="0.1.0",
+            android_api_level=35,
+            payload={
+                "ipv4_address": "192.0.2.45",
+                "ipv6_addresses": ["2001:db8::45", "fe80::45"],
+                "ip_addresses": ["192.0.2.45", "2001:db8::45", "fe80::45"],
+                "gateway": "fe80::1",
+            },
+        ),
+        status="accepted",
+    )
+    logger.close()
+
+    rows = list(csv.DictReader(path.open(encoding="utf-8")))
+    assert rows[0]["local_ipv4_address"] == "192.0.2.45"
+    assert rows[0]["local_ipv6_addresses"] == "2001:db8::45;fe80::45"
+    assert rows[0]["local_ip_addresses"] == "192.0.2.45;2001:db8::45;fe80::45"
+    assert rows[0]["gateway"] == "fe80::1"
+
+
 def test_android_csv_logger_writes_event_diagnostics_and_flushes(tmp_path):
     path = tmp_path / "probe.csv"
     logger = AndroidCSVLogger(path)

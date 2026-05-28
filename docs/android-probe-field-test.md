@@ -10,6 +10,18 @@ wifiops probe receive --pair --host 0.0.0.0 --advertise-host <wifiops-machine-ip
 
 Use this only on trusted test networks. Binding to `0.0.0.0` exposes the local receiver on the LAN; the receiver prints a warning when it binds outside loopback.
 
+For IPv6-only or dual-stack tests, bind and advertise an IPv6 literal. The pairing URL will use brackets automatically:
+
+```bash
+wifiops probe receive --pair --host :: --advertise-host <wifiops-machine-ipv6> --log walktest-ipv6.csv
+```
+
+Example pairing URL:
+
+```text
+http://[2001:db8::10]:8765
+```
+
 For local receiver-only smoke tests, keep the bind host on loopback:
 
 ```bash
@@ -40,5 +52,6 @@ wifiops probe receive --pair --host 127.0.0.1 --port 8765 --log /tmp/android-pro
 ## Troubleshooting
 
 - If the phone cannot reach the receiver, verify that `--advertise-host` is the wifiops machine IP address reachable from the phone's Wi-Fi network.
+- For IPv6 literals, enter or paste the bracketed URL exactly, for example `http://[2001:db8::10]:8765`.
 - If records stay pending after reconnecting, restart pairing and confirm the token was copied exactly.
 - If SSID or BSSID fields are unavailable, confirm the requested Android Wi-Fi permissions were granted. The app does not collect GPS coordinates.

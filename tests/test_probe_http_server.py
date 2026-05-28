@@ -5,7 +5,7 @@ import socket
 import threading
 from http.client import HTTPConnection
 
-from wifiops_probe.http_server import ProbeHTTPServer, ProbeRequestHandler
+from wifiops_probe.http_server import ProbeHTTPServer, ProbeIPv6HTTPServer, ProbeRequestHandler
 from wifiops_probe.models import MAX_BODY_BYTES
 from wifiops_probe.state import ReceiverSession
 
@@ -44,6 +44,14 @@ def stop_server(server: ProbeHTTPServer):
     server.server_close()
 
 
+def start_ipv6_server():
+    session = ReceiverSession(session_id="walk_1", token="secret")
+    server = ProbeIPv6HTTPServer(("::1", 0), ProbeRequestHandler, session=session)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, thread
+
+
 def test_health_endpoint_returns_ok():
     server, _thread = start_server()
     conn = HTTPConnection("127.0.0.1", server.server_port)
@@ -59,6 +67,22 @@ def test_health_endpoint_returns_ok():
     assert response.status == 200
     assert body["ok"] is True
     assert body["session_id"] == "walk_1"
+
+
+def test_ipv6_health_endpoint_returns_ok():
+    server, _thread = start_ipv6_server()
+    conn = HTTPConnection("::1", server.server_port)
+
+    try:
+        conn.request("GET", "/health")
+        response = conn.getresponse()
+        body = json.loads(response.read())
+    finally:
+        conn.close()
+        stop_server(server)
+
+    assert response.status == 200
+    assert body["ok"] is True
 
 
 def test_records_endpoint_requires_bearer_token():

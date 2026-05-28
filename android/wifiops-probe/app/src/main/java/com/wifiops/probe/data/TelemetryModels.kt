@@ -40,6 +40,10 @@ data class TelemetryPayload(
     val rxLinkMbps: Int? = null,
     @SerialName("ipv4_address")
     val ipv4Address: String? = null,
+    @SerialName("ipv6_addresses")
+    val ipv6Addresses: List<String> = emptyList(),
+    @SerialName("ip_addresses")
+    val ipAddresses: List<String> = emptyList(),
     val gateway: String? = null,
     val dns: List<String> = emptyList(),
     val availability: Map<String, String> = emptyMap()

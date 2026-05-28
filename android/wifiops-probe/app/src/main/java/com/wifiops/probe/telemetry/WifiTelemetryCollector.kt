@@ -6,6 +6,7 @@ import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import com.wifiops.probe.data.TelemetryPayload
 import java.net.Inet4Address
+import java.net.Inet6Address
 
 fun channelFromFrequency(frequencyMhz: Int?): String? {
     return when (frequencyMhz) {
@@ -104,6 +105,22 @@ class WifiTelemetryCollector(
             ?.firstOrNull { it.address is Inet4Address }
             ?.address
             ?.hostAddress
+        val ipAddresses = linkProperties
+            ?.linkAddresses
+            ?.mapNotNull { it.address.hostAddress?.withoutIpv6Scope() }
+            .orEmpty()
+        val ipv6Addresses = linkProperties
+            ?.linkAddresses
+            ?.mapNotNull { linkAddress ->
+                linkAddress.address
+                    .takeIf { it is Inet6Address }
+                    ?.hostAddress
+                    ?.withoutIpv6Scope()
+            }
+            .orEmpty()
+        if (ipAddresses.isEmpty()) {
+            availability["ipAddresses"] = if (network == null) "no_wifi_network" else "unavailable"
+        }
 
         return TelemetryPayload(
             ssid = ssid,
@@ -114,6 +131,8 @@ class WifiTelemetryCollector(
             txLinkMbps = txLinkMbps,
             rxLinkMbps = rxLinkMbps,
             ipv4Address = ipv4Address,
+            ipv6Addresses = ipv6Addresses,
+            ipAddresses = ipAddresses,
             gateway = gateway,
             dns = dns,
             availability = availability
@@ -128,6 +147,10 @@ private fun String?.redactedSsid(): String? {
 
 private fun String?.redactedBssid(): String? {
     return this?.takeUnless { it == "02:00:00:00:00:00" }
+}
+
+private fun String.withoutIpv6Scope(): String {
+    return substringBefore("%")
 }
 
 private const val INVALID_RSSI = -127

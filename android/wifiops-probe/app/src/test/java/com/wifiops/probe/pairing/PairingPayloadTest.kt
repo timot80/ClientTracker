@@ -30,6 +30,17 @@ class PairingPayloadTest {
     }
 
     @Test
+    fun acceptsBracketedIpv6ReceiverUrls() {
+        val payload = PairingPayload.fromManualFields(
+            receiverUrl = "http://[2001:db8::10]:8765/",
+            sessionId = "walk_1",
+            token = "secret"
+        )
+
+        assertEquals("http://[2001:db8::10]:8765", payload.receiverUrl)
+    }
+
+    @Test
     fun rejectsMissingRequiredJsonFields() {
         assertThrows(IllegalArgumentException::class.java) {
             PairingPayload.parse("""{"receiver_url":"http://192.0.2.10:8765","session_id":"walk_1"}""")

@@ -21,6 +21,8 @@ ANDROID_CSV_COLUMNS = (
     "local_channel",
     "local_signal",
     "local_ipv4_address",
+    "local_ipv6_addresses",
+    "local_ip_addresses",
     "gateway",
     "probe_gateway",
     "probe_dns",
@@ -60,6 +62,8 @@ class AndroidCSVLogger:
                     "local_channel": _string(payload.get("channel") or payload.get("frequency_mhz")),
                     "local_signal": _string(payload.get("rssi")),
                     "local_ipv4_address": _string(payload.get("ipv4_address")),
+                    "local_ipv6_addresses": _string_list(payload.get("ipv6_addresses")),
+                    "local_ip_addresses": _string_list(payload.get("ip_addresses")),
                     "gateway": _string(payload.get("gateway")),
                     "probe_gateway": _probe_cell(probes, "gateway"),
                     "probe_dns": _probe_cell(probes, "dns"),
@@ -91,4 +95,12 @@ def _probe_cell(probes: Any, name: str) -> str:
 def _string(value: Any) -> str:
     if value is None:
         return ""
+    return str(value)
+
+
+def _string_list(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        return ";".join(str(item) for item in value)
     return str(value)
