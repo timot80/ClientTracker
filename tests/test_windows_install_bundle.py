@@ -29,6 +29,8 @@ def test_windows_installer_script_has_safe_offline_install_contract():
     assert "config.example.yaml" in text
     assert "if (-not (Test-Path $ConfigPath))" in text
     assert "wifiops-check.cmd" in text
+    assert "pip install --upgrade pip" not in text
+    assert "--upgrade pip" not in text
 
 
 def test_windows_launchers_use_app_local_config_and_pass_args():
@@ -38,6 +40,8 @@ def test_windows_launchers_use_app_local_config_and_pass_args():
         assert "WIFIOPS_APP_DIR" in text
         assert "WIFIOPS_CONFIG" in text
         assert "%*" in text
+        assert "%~dp0" in text
+        assert "%LOCALAPPDATA%" not in text
 
     assert "c9800 radio --config \"%WIFIOPS_CONFIG%\"" in (
         LAUNCHERS / "wifiops-ap-radio.cmd"
@@ -72,6 +76,7 @@ def test_windows_bundle_builder_creates_self_contained_zip_layout():
     assert "Compress-Archive" in text
     assert "wifiops-windows-$Version.zip" in text
     assert "wifiops-check.cmd" in text
+    assert "Join-Path $RootDir \"pyproject.toml\"" in text
 
 
 def test_readme_documents_windows_bundle():

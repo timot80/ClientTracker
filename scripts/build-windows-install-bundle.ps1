@@ -7,7 +7,8 @@ $DistRoot = if ($env:WIFIOPS_BUNDLE_DIST_DIR) { $env:WIFIOPS_BUNDLE_DIST_DIR } e
 $BuildRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("wifiops-windows-bundle-" + [System.Guid]::NewGuid().ToString("N"))
 
 try {
-    $Version = & $Python -c "import tomllib, pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))['project']['version'])"
+    $PyProjectPath = Join-Path $RootDir "pyproject.toml"
+    $Version = & $Python -c "import pathlib, sys, tomllib; print(tomllib.loads(pathlib.Path(sys.argv[1]).read_text(encoding='utf-8'))['project']['version'])" $PyProjectPath
     if ($LASTEXITCODE -ne 0) {
         throw "Unable to read project version"
     }

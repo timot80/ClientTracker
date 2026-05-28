@@ -47,7 +47,6 @@ New-Item -ItemType Directory -Force -Path $InstallDir, $BinDir | Out-Null
 
 & $Python.Exe @($Python.Args + @("-m", "venv", $VenvDir))
 $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
-& $VenvPython -m pip install --upgrade pip
 & $VenvPython -m pip install `
     --no-index `
     --find-links $WheelsDir `
