@@ -19,6 +19,8 @@ def collect_once(session, config: APPortAuditConfig) -> APPortSnapshot:
     output = session.get_ethernet_statistics()
     snapshot = parse_ethernet_statistics(output)
     if not snapshot.rows:
+        if _is_empty_ap_inventory_output(output):
+            return snapshot
         return APPortSnapshot(
             parser_warnings=snapshot.parser_warnings,
             poll_error="no AP Ethernet port rows parsed",
@@ -83,8 +85,13 @@ def _collect_target(target: WlcTarget, audit_config: APPortAuditConfig) -> APPor
             rows=[replace(row, wlc_name=target.name) for row in snapshot.rows],
             parser_warnings=[f"{target.name}: {warning}" for warning in snapshot.parser_warnings],
         )
+    except Exception as exc:
+        return APPortFailure(wlc_name=target.name, message=f"poll failed: {exc}")
     finally:
-        session.disconnect()
+        try:
+            session.disconnect()
+        except Exception:
+            pass
 
 
 def _collect_with_error_handling(
@@ -118,3 +125,13 @@ def _output_excerpt(output: str, limit: int = 160) -> str:
     if len(collapsed) <= limit:
         return collapsed
     return collapsed[:limit] + "..."
+
+
+def _is_empty_ap_inventory_output(output: str) -> bool:
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    if not lines:
+        return False
+    return all(
+        line.startswith(("Load for ", "Time source is "))
+        for line in lines
+    )

@@ -63,6 +63,25 @@ def test_run_once_returns_nonzero_for_unparseable_output(monkeypatch):
     assert "no AP Ethernet port rows parsed" in rendered
 
 
+def test_run_once_treats_controller_with_no_aps_as_empty_success(monkeypatch):
+    class NoApSession(FakeSession):
+        def get_ethernet_statistics(self):
+            return (
+                "Load for five secs: 1%/0%; one minute: 4%; five minutes: 4%\n"
+                "Time source is NTP, 17:54:38.300 PDT Wed May 27 2026\n"
+            )
+
+    console = Console(record=True, width=140)
+    monkeypatch.setattr("ap_port_audit.app.APPortAuditSession", NoApSession)
+
+    exit_code = run_once(WLCConfig(host="192.0.2.10", username="u", password="p"), APPortAuditConfig(), console)
+
+    rendered = console.export_text()
+    assert exit_code == 0
+    assert "No AP Ethernet port issues found" in rendered
+    assert "no AP Ethernet port rows parsed" not in rendered
+
+
 def test_run_multi_aggregates_rows_and_returns_nonzero_for_partial_failure(monkeypatch):
     from ap_port_audit.app import run_multi
 
@@ -96,3 +115,29 @@ def test_run_multi_aggregates_rows_and_returns_nonzero_for_partial_failure(monke
     assert "BAD-AP" in rendered
     assert "mby-2" in rendered
     assert "connection lost" in rendered
+
+
+def test_run_multi_reports_connect_failure_with_wlc_name(monkeypatch):
+    from ap_port_audit.app import run_multi
+
+    class ConnectFailureSession:
+        def __init__(self, _config):
+            pass
+
+        def connect(self):
+            raise RuntimeError("connect failed")
+
+        def disconnect(self):
+            pass
+
+    targets = [WlcTarget("mby-1", WLCConfig(host="192.0.2.10", username="u", password="p"))]
+    console = Console(record=True, width=160)
+    monkeypatch.setattr("ap_port_audit.app.APPortAuditSession", ConnectFailureSession)
+
+    exit_code = run_multi(targets, APPortAuditConfig(), 1, console)
+
+    rendered = console.export_text()
+    assert exit_code == 1
+    assert "mby-1" in rendered
+    assert "connect failed" in rendered
+    assert "unknown" not in rendered
