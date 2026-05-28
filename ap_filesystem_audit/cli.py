@@ -46,6 +46,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     console = Console()
     try:
+        if args.reload_full_tmp and not args.confirm_reload_full_tmp:
+            raise ValueError("--reload-full-tmp requires --confirm-reload-full-tmp")
         config = load_config(args.config)
         audit_config = config.audit
         if args.include:
@@ -64,8 +66,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             audit_config = replace(audit_config, ap_concurrency=args.ap_concurrency)
         if args.output:
             audit_config = replace(audit_config, output=args.output)
-        if args.reload_full_tmp and not args.confirm_reload_full_tmp:
-            raise ValueError("--reload-full-tmp requires --confirm-reload-full-tmp")
         if args.reload_full_tmp:
             audit_config = replace(
                 audit_config,
