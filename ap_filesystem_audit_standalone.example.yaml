@@ -1,0 +1,33 @@
+wlc:
+  name: "wlc-1"
+  host: "192.0.2.10"
+  username: "wlc-user"
+  password: "wlc-password"
+  enable: ""
+  read_timeout: 90
+
+# Use wlcs instead of wlc for multi-controller runs.
+# wlcs:
+#   - name: "wlc-89"
+#     host: "10.23.76.89"
+#     username: "wlc-user"
+#     password: "wlc-password"
+#   - name: "wlc-93"
+#     host: "10.23.76.93"
+#     username: "wlc-user"
+#     password: "wlc-password"
+
+wifiops:
+  wlc_concurrency: 3
+
+ap:
+  username: "ap-user"
+  password: "ap-password"
+  enable: ""
+
+ap_filesystems:
+  include: []
+  exclude: []
+  min_used_percent: 95
+  show_all: false
+  ap_concurrency: 20

@@ -376,6 +376,18 @@ ap_filesystems:
   ap_concurrency: 20
 ```
 
+Standalone use is also available when the package is not installed:
+
+```bash
+python ap_filesystem_audit_standalone.py --config ap_filesystem_audit_standalone.example.yaml
+python ap_filesystem_audit_standalone.py --config config.yaml --wlc wlc-93 --output /tmp/wlc-93-filesystems.csv
+python ap_filesystem_audit_standalone.py --config config.yaml --reload-full-tmp --confirm-reload-full-tmp
+```
+
+The standalone script has the same `/tmp` reload guard as the package command:
+reload is disabled unless both reload flags are present, and it only reloads an
+AP when `/tmp` is exactly `100%` used.
+
 ## Example Output
 
 ```
