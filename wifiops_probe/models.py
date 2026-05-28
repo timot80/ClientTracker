@@ -15,7 +15,17 @@ REQUIRED_RECORD_FIELDS = (
     "sequence_number",
     "record_type",
     "client_timestamp",
+    "app_version",
+    "android_api_level",
     "payload",
+)
+
+REQUIRED_STRING_FIELDS = (
+    "session_id",
+    "device_id",
+    "record_id",
+    "client_timestamp",
+    "app_version",
 )
 
 
@@ -36,11 +46,13 @@ class AndroidTelemetryRecord:
     record_type: RecordType
     client_timestamp: str
     payload: dict[str, Any]
-    app_version: str = ""
-    android_api_level: int | None = None
+    app_version: str
+    android_api_level: int
 
 
-def parse_record_batch(body: dict[str, Any]) -> list[AndroidTelemetryRecord]:
+def parse_record_batch(body: Any) -> list[AndroidTelemetryRecord]:
+    if not isinstance(body, dict):
+        raise TelemetryValidationError("invalid_body", "request body must be a JSON object")
     records = body.get("records")
     if not isinstance(records, list):
         raise TelemetryValidationError("missing_records", "request body must contain a records array")
@@ -59,19 +71,24 @@ def _parse_record(record: Any) -> AndroidTelemetryRecord:
         raise TelemetryValidationError("unsupported_schema", "schema_version must be 1")
     if record["record_type"] not in ("sample", "event"):
         raise TelemetryValidationError("invalid_record_type", "record_type must be sample or event")
-    if not isinstance(record["sequence_number"], int):
+    for field in REQUIRED_STRING_FIELDS:
+        if not isinstance(record[field], str) or not record[field]:
+            raise TelemetryValidationError("invalid_string", f"{field} must be a non-empty string")
+    if not isinstance(record["sequence_number"], int) or isinstance(record["sequence_number"], bool):
         raise TelemetryValidationError("invalid_sequence", "sequence_number must be an integer")
+    if not isinstance(record["android_api_level"], int) or isinstance(record["android_api_level"], bool):
+        raise TelemetryValidationError("invalid_android_api_level", "android_api_level must be an integer")
     if not isinstance(record["payload"], dict):
         raise TelemetryValidationError("invalid_payload", "payload must be an object")
     return AndroidTelemetryRecord(
         schema_version=record["schema_version"],
-        session_id=str(record["session_id"]),
-        device_id=str(record["device_id"]),
-        record_id=str(record["record_id"]),
+        session_id=record["session_id"],
+        device_id=record["device_id"],
+        record_id=record["record_id"],
         sequence_number=record["sequence_number"],
         record_type=record["record_type"],
-        client_timestamp=str(record["client_timestamp"]),
+        client_timestamp=record["client_timestamp"],
         payload=record["payload"],
-        app_version=str(record.get("app_version", "")),
-        android_api_level=record.get("android_api_level"),
+        app_version=record["app_version"],
+        android_api_level=record["android_api_level"],
     )

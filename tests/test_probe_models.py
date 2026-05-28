@@ -75,3 +75,97 @@ def test_parse_record_batch_rejects_missing_required_field():
         assert "device_id" in exc.message
     else:
         raise AssertionError("expected TelemetryValidationError")
+
+
+def test_parse_record_batch_rejects_missing_app_version():
+    sample = valid_sample()
+    del sample["app_version"]
+
+    try:
+        parse_record_batch({"records": [sample]})
+    except TelemetryValidationError as exc:
+        assert exc.code == "missing_field"
+        assert "app_version" in exc.message
+    else:
+        raise AssertionError("expected TelemetryValidationError")
+
+
+def test_parse_record_batch_rejects_missing_android_api_level():
+    sample = valid_sample()
+    del sample["android_api_level"]
+
+    try:
+        parse_record_batch({"records": [sample]})
+    except TelemetryValidationError as exc:
+        assert exc.code == "missing_field"
+        assert "android_api_level" in exc.message
+    else:
+        raise AssertionError("expected TelemetryValidationError")
+
+
+def test_parse_record_batch_rejects_array_body():
+    try:
+        parse_record_batch([])
+    except TelemetryValidationError as exc:
+        assert exc.code == "invalid_body"
+    else:
+        raise AssertionError("expected TelemetryValidationError")
+
+
+def test_parse_record_batch_rejects_none_body():
+    try:
+        parse_record_batch(None)
+    except TelemetryValidationError as exc:
+        assert exc.code == "invalid_body"
+    else:
+        raise AssertionError("expected TelemetryValidationError")
+
+
+def test_parse_record_batch_rejects_bool_sequence_number():
+    sample = valid_sample()
+    sample["sequence_number"] = True
+
+    try:
+        parse_record_batch({"records": [sample]})
+    except TelemetryValidationError as exc:
+        assert exc.code == "invalid_sequence"
+    else:
+        raise AssertionError("expected TelemetryValidationError")
+
+
+def test_parse_record_batch_rejects_non_string_device_id():
+    sample = valid_sample()
+    sample["device_id"] = 123
+
+    try:
+        parse_record_batch({"records": [sample]})
+    except TelemetryValidationError as exc:
+        assert exc.code == "invalid_string"
+        assert "device_id" in exc.message
+    else:
+        raise AssertionError("expected TelemetryValidationError")
+
+
+def test_parse_record_batch_rejects_empty_app_version():
+    sample = valid_sample()
+    sample["app_version"] = ""
+
+    try:
+        parse_record_batch({"records": [sample]})
+    except TelemetryValidationError as exc:
+        assert exc.code == "invalid_string"
+        assert "app_version" in exc.message
+    else:
+        raise AssertionError("expected TelemetryValidationError")
+
+
+def test_parse_record_batch_rejects_invalid_android_api_level():
+    sample = valid_sample()
+    sample["android_api_level"] = True
+
+    try:
+        parse_record_batch({"records": [sample]})
+    except TelemetryValidationError as exc:
+        assert exc.code == "invalid_android_api_level"
+    else:
+        raise AssertionError("expected TelemetryValidationError")
