@@ -1,7 +1,17 @@
 from __future__ import annotations
 
+import time
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
+
 from wifiops_probe.models import AndroidTelemetryRecord
 from wifiops_probe.state import ReceiverSession
+
+
+class SlowRecordId(str):
+    def __hash__(self) -> int:
+        time.sleep(0.001)
+        return super().__hash__()
 
 
 def telemetry_record(
@@ -54,3 +64,29 @@ def test_receiver_session_rejects_mismatched_device_after_binding():
 
     assert session.ingest(telemetry_record(device_id="android_probe_9f3c")) == "accepted"
     assert session.ingest(telemetry_record(record_id="01JABD", device_id="android_probe_other")) == "rejected_device"
+
+
+def test_receiver_session_atomically_deduplicates_concurrent_record_id():
+    session = ReceiverSession(session_id="walk_20260527_abc123", token="secret", device_id="android_probe_9f3c")
+    records = [
+        telemetry_record(record_id=SlowRecordId("01JABC"), device_id="android_probe_9f3c")
+        for _ in range(20)
+    ]
+
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        results = list(executor.map(session.ingest, records))
+
+    assert Counter(results) == {"accepted": 1, "duplicate": 19}
+
+
+def test_receiver_session_atomically_binds_first_concurrent_device():
+    session = ReceiverSession(session_id="walk_20260527_abc123", token="secret")
+    records = [
+        telemetry_record(record_id=SlowRecordId("01JABC"), device_id="android_probe_9f3c"),
+        telemetry_record(record_id=SlowRecordId("01JABD"), device_id="android_probe_other"),
+    ]
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(session.ingest, records))
+
+    assert Counter(results) == {"accepted": 1, "rejected_device": 1}
