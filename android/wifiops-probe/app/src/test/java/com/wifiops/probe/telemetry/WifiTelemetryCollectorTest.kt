@@ -20,6 +20,21 @@ class WifiTelemetryCollectorTest {
     }
 
     @Test
+    fun gatewayProbeHostAddsInterfaceScopeForLinkLocalIpv6() {
+        val host = gatewayProbeHost("fe80::2", "wlan0")
+
+        assertEquals("fe80::2%wlan0", host)
+    }
+
+    @Test
+    fun gatewayProbeHostKeepsRoutableAndAlreadyScopedGatewaysUnchanged() {
+        assertEquals("2602:80a::1", gatewayProbeHost("2602:80a::1", "wlan0"))
+        assertEquals("10.23.4.1", gatewayProbeHost("10.23.4.1", "wlan0"))
+        assertEquals("fe80::2%wlan0", gatewayProbeHost("fe80::2%wlan0", "wlan0"))
+        assertNull(gatewayProbeHost("fe80::2", null))
+    }
+
+    @Test
     fun channelFromFrequencyHandlesFiveGhz() {
         assertEquals("36", channelFromFrequency(5180))
     }

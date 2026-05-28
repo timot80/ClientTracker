@@ -27,6 +27,15 @@ fun wifiNetwork(connectivityManager: ConnectivityManager): Network? {
     }
 }
 
+fun gatewayProbeHost(gateway: String?, interfaceName: String?): String? {
+    val host = gateway?.takeIf { it.isNotBlank() } ?: return null
+    if (!host.isIpv6LinkLocal() || host.contains("%")) {
+        return host
+    }
+    val scope = interfaceName?.takeIf { it.isNotBlank() } ?: return null
+    return "$host%$scope"
+}
+
 internal fun <T> selectWifiNetwork(
     candidates: Array<T>,
     hasWifiTransport: (T) -> Boolean
@@ -151,6 +160,10 @@ private fun String?.redactedBssid(): String? {
 
 private fun String.withoutIpv6Scope(): String {
     return substringBefore("%")
+}
+
+private fun String.isIpv6LinkLocal(): Boolean {
+    return lowercase().startsWith("fe80:")
 }
 
 private const val INVALID_RSSI = -127

@@ -39,7 +39,7 @@ class ActiveProbeRunner(
             var failureDetail: String? = null
             val latencyMs = withContext(ioDispatcher) {
                 measureTimeMillis {
-                    val addresses = network.getAllByName(host)
+                    val addresses = resolvedAddresses(host, network)
                     failureDetail = connectFirstResolvedAddress(addresses, port) { socketAddress ->
                         network.socketFactory.createSocket().use { socket ->
                             socket.connect(socketAddress, timeoutMs)
@@ -126,6 +126,14 @@ class ActiveProbeRunner(
 
     private companion object {
         const val NO_WIFI_NETWORK = "no_wifi_network"
+    }
+}
+
+private fun resolvedAddresses(host: String, network: Network): Array<InetAddress> {
+    return if (host.contains("%")) {
+        arrayOf(InetAddress.getByName(host))
+    } else {
+        network.getAllByName(host)
     }
 }
 

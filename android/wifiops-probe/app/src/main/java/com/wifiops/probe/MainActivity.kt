@@ -4,8 +4,10 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -53,9 +55,19 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
         if (results.values.all { it }) {
-            startProbeService()
+            startProbeWithPermissions()
         } else {
             permissionMessage = "Required Wi-Fi probe permissions were not granted."
+        }
+    }
+
+    private val appSettingsLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (hasBackgroundLocationForServiceWifiIdentity()) {
+            startProbeService()
+        } else {
+            permissionMessage = "Set Location to Allow all the time so the service can read SSID and BSSID."
         }
     }
 
@@ -122,14 +134,33 @@ class MainActivity : ComponentActivity() {
     private fun startProbeWithPermissions() {
         val missingPermissions = requiredRuntimePermissions()
             .filter { permission ->
-                ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED
+                !hasPermission(permission)
             }
 
-        if (missingPermissions.isEmpty()) {
-            startProbeService()
-        } else {
-            permissionLauncher.launch(missingPermissions.toTypedArray())
+        when {
+            missingPermissions.isNotEmpty() -> {
+                permissionLauncher.launch(missingPermissions.toTypedArray())
+            }
+
+            !hasBackgroundLocationForServiceWifiIdentity() -> {
+                permissionMessage = "Set Location to Allow all the time so the service can read SSID and BSSID."
+                appSettingsLauncher.launch(
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                        .setData(Uri.fromParts("package", packageName, null))
+                )
+            }
+
+            else -> startProbeService()
         }
+    }
+
+    private fun hasBackgroundLocationForServiceWifiIdentity(): Boolean {
+        return !needsBackgroundLocationForServiceWifiIdentity() ||
+            hasPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+    }
+
+    private fun hasPermission(permission: String): Boolean {
+        return ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun startProbeService() {
@@ -276,22 +307,6 @@ class MainActivity : ComponentActivity() {
             .putString(KEY_SESSION_ID, pairing.sessionId)
             .putString(KEY_TOKEN, pairing.token)
             .apply()
-    }
-
-    private fun requiredRuntimePermissions(): List<String> {
-        return when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> listOf(
-                Manifest.permission.NEARBY_WIFI_DEVICES,
-                Manifest.permission.POST_NOTIFICATIONS,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            )
-
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> listOf(
-                Manifest.permission.ACCESS_FINE_LOCATION
-            )
-
-            else -> emptyList()
-        }
     }
 
     private companion object {

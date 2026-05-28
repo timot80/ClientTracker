@@ -21,6 +21,7 @@ import com.wifiops.probe.sync.ProbeSyncWorker
 import com.wifiops.probe.telemetry.ActiveProbeRunner
 import com.wifiops.probe.telemetry.ProbeResult
 import com.wifiops.probe.telemetry.WifiTelemetryCollector
+import com.wifiops.probe.telemetry.gatewayProbeHost
 import com.wifiops.probe.telemetry.wifiNetwork
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -151,9 +152,15 @@ class ProbeForegroundService : Service() {
 
     private suspend fun collectActiveProbes(gateway: String?, receiverUrl: String): Map<String, ProbeResult> {
         val network = wifiNetwork(connectivityManager)
+        val gatewayProbeHost = gatewayProbeHost(
+            gateway = gateway,
+            interfaceName = network?.let { connectivityManager.getLinkProperties(it)?.interfaceName }
+        )
         val probes = linkedMapOf<String, ProbeResult>()
-        if (!gateway.isNullOrBlank()) {
-            probes["gateway"] = probeRunner.tcpConnect(gateway, DNS_PORT, ACTIVE_PROBE_TIMEOUT_MS, network)
+        if (!gatewayProbeHost.isNullOrBlank()) {
+            probes["gateway"] = probeRunner.tcpConnect(gatewayProbeHost, DNS_PORT, ACTIVE_PROBE_TIMEOUT_MS, network)
+        } else if (!gateway.isNullOrBlank()) {
+            probes["gateway"] = ProbeResult(ok = false, detail = "gateway_scope_unavailable")
         } else {
             probes["gateway"] = ProbeResult(ok = false, detail = "gateway_unavailable")
         }
