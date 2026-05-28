@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.fillMaxSize
 import com.wifiops.probe.pairing.PairingPayload
 import com.wifiops.probe.service.ProbeForegroundService
+import com.wifiops.probe.sync.ProbeSyncClient
 import com.wifiops.probe.ui.TelemetryCounters
 import com.wifiops.probe.ui.PairScreen
 import com.wifiops.probe.ui.SessionHistoryScreen
@@ -42,7 +43,9 @@ class MainActivity : ComponentActivity() {
     private var permissionMessage by mutableStateOf<String?>(null)
     private var sessionHistory by mutableStateOf<List<SessionSummary>>(emptyList())
     private var sessionCounters by mutableStateOf(TelemetryCounters())
+    private var receiverReachable by mutableStateOf<Boolean?>(null)
     private var counterRefreshJob: Job? = null
+    private val syncClient = ProbeSyncClient()
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -87,6 +90,7 @@ class MainActivity : ComponentActivity() {
                             state = SessionUiState(
                                 pairing = paired,
                                 running = probeRunning,
+                                receiverReachable = receiverReachable,
                                 counters = sessionCounters,
                                 permissionMessage = permissionMessage
                             ),
@@ -127,6 +131,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         permissionMessage = null
+        receiverReachable = null
         ContextCompat.startForegroundService(
             this,
             Intent(this, ProbeForegroundService::class.java)
@@ -144,6 +149,7 @@ class MainActivity : ComponentActivity() {
         probeRunning = false
         counterRefreshJob?.cancel()
         counterRefreshJob = null
+        receiverReachable = null
         pairingPayload?.sessionId?.let { refreshSessionCounters(it) }
     }
 
@@ -152,6 +158,7 @@ class MainActivity : ComponentActivity() {
         counterRefreshJob = lifecycleScope.launch {
             while (isActive) {
                 refreshSessionCounters(sessionId)
+                pairingPayload?.receiverUrl?.let { refreshReceiverReachability(it) }
                 refreshSessionHistory()
                 delay(1_000)
             }
@@ -164,6 +171,14 @@ class MainActivity : ComponentActivity() {
         }
         lifecycleScope.launch {
             sessionCounters = loadCounters(sessionId)
+        }
+    }
+
+    private fun refreshReceiverReachability(receiverUrl: String) {
+        lifecycleScope.launch {
+            receiverReachable = withContext(Dispatchers.IO) {
+                runCatching { syncClient.health(receiverUrl) }.getOrDefault(false)
+            }
         }
     }
 
@@ -203,6 +218,7 @@ class MainActivity : ComponentActivity() {
             stopProbeService()
             pairingPayload = null
             sessionCounters = TelemetryCounters()
+            receiverReachable = null
             showingHistory = false
         }
         lifecycleScope.launch {
