@@ -33,6 +33,11 @@
             </intent-filter>
         </activity>
 
+        <service
+            android:name=".service.ProbeForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
     </application>
 
 </manifest>
