@@ -10,6 +10,7 @@ ap_balance:
   limit: 75
   display_columns: 1
   auto_exclude_admin_down_slots: false
+  min_total_clients: 1
   include: []
   exclude: []
   included_slots: []

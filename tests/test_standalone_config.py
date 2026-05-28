@@ -23,6 +23,7 @@ ap_balance:
   limit: 25
   display_columns: 2
   auto_exclude_admin_down_slots: true
+  min_total_clients: 3
   busy_idle_utilization: 35
   imbalance:
     ratio_threshold: 8
@@ -50,6 +51,7 @@ ap_balance:
     assert balance_config.limit == 25
     assert balance_config.display_columns == 2
     assert balance_config.auto_exclude_admin_down_slots is True
+    assert balance_config.min_total_clients == 3
     assert balance_config.busy_idle_utilization == 35
     assert balance_config.ratio_threshold == 8
     assert balance_config.min_difference == 12
@@ -131,6 +133,31 @@ def test_standalone_table_supports_two_display_columns():
     assert header_line.count("AP") == 2
     assert any("AP-0" in line and "AP-2" in line for line in rendered.splitlines())
     assert any("AP-1" in line and "AP-3" in line for line in rendered.splitlines())
+
+
+def test_standalone_scores_dual_radio_single_reporting_slot_as_ok():
+    score = standalone.score_ap(
+        _make_ap("MBY-EVNT-CNTR_HLWY-22", [15, None]),
+        standalone.APBalanceConfig(),
+    )
+
+    assert score.status == "OK"
+    assert score.max_clients == 15
+    assert score.min_clients == 15
+    assert score.spread == 0
+    assert score.reason == "single comparable slot"
+
+
+def test_standalone_table_does_not_render_no_data_for_dual_radio_single_reporting_slot():
+    snapshot = standalone.LoadInfoSnapshot(ap_loads=[_make_ap("MBY-EVNT-CNTR_HLWY-22", [15, None])])
+    console = Console(record=True, width=120)
+
+    console.print(standalone.build_monitor_table(snapshot, standalone.APBalanceConfig()))
+    rendered = console.export_text()
+
+    assert "MBY-EVNT-CNTR_HLWY-22" in rendered
+    assert "OK" in rendered
+    assert "NO DATA" not in rendered
 
 
 def test_standalone_two_column_table_renders_metadata_rows():

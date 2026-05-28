@@ -412,12 +412,22 @@ def filter_aps(aps: list[APLoad], config: APBalanceConfig) -> list[APLoad]:
 
 def score_ap(ap: APLoad, config: APBalanceConfig) -> BalanceScore:
     comparable = _comparable_clients(ap, config)
+    comparable_total = sum(comparable)
 
-    if ap.total_clients < config.min_total_clients:
+    if comparable_total < config.min_total_clients:
         if comparable and all(value == 0 for value in comparable):
             return _zero_client_score(ap, config)
         return BalanceScore(status="INSUFFICIENT_DATA", reason="below minimum clients")
     if len(comparable) < 2:
+        if ap.slots <= 2 and comparable and any(value > 0 for value in comparable):
+            only_value = comparable[0]
+            return BalanceScore(
+                status="OK",
+                max_clients=only_value,
+                min_clients=only_value,
+                spread=0,
+                reason="single comparable slot",
+            )
         return BalanceScore(status="INSUFFICIENT_DATA", reason="fewer than two comparable slots")
     if not any(value > 0 for value in comparable):
         return _zero_client_score(ap, config)
@@ -877,6 +887,7 @@ def build_configs(args: argparse.Namespace) -> tuple[WLCConfig, APBalanceConfig]
             args.auto_exclude_admin_down_slots
             or bool(ap_raw.get("auto_exclude_admin_down_slots", False))
         ),
+        min_total_clients=int(ap_raw.get("min_total_clients", 1)),
         busy_idle_utilization=int(
             _first_present(args.busy_idle_util, ap_raw.get("busy_idle_utilization"), 20)
         ),
