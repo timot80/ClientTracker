@@ -28,6 +28,9 @@ import com.wifiops.probe.ui.SessionScreen
 import com.wifiops.probe.ui.SessionSummary
 import com.wifiops.probe.ui.SessionUiState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -38,6 +41,8 @@ class MainActivity : ComponentActivity() {
     private var showingHistory by mutableStateOf(false)
     private var permissionMessage by mutableStateOf<String?>(null)
     private var sessionHistory by mutableStateOf<List<SessionSummary>>(emptyList())
+    private var sessionCounters by mutableStateOf(TelemetryCounters())
+    private var counterRefreshJob: Job? = null
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -65,6 +70,7 @@ class MainActivity : ComponentActivity() {
                         paired == null -> PairScreen(
                             onPaired = {
                                 pairingPayload = it
+                                sessionCounters = TelemetryCounters()
                                 permissionMessage = null
                                 showingHistory = false
                             }
@@ -81,6 +87,7 @@ class MainActivity : ComponentActivity() {
                             state = SessionUiState(
                                 pairing = paired,
                                 running = probeRunning,
+                                counters = sessionCounters,
                                 permissionMessage = permissionMessage
                             ),
                             onStart = { startProbeWithPermissions() },
@@ -129,11 +136,35 @@ class MainActivity : ComponentActivity() {
         )
         probeRunning = true
         refreshSessionHistory()
+        startCounterRefresh(paired.sessionId)
     }
 
     private fun stopProbeService() {
         stopService(Intent(this, ProbeForegroundService::class.java))
         probeRunning = false
+        counterRefreshJob?.cancel()
+        counterRefreshJob = null
+        pairingPayload?.sessionId?.let { refreshSessionCounters(it) }
+    }
+
+    private fun startCounterRefresh(sessionId: String) {
+        counterRefreshJob?.cancel()
+        counterRefreshJob = lifecycleScope.launch {
+            while (isActive) {
+                refreshSessionCounters(sessionId)
+                refreshSessionHistory()
+                delay(1_000)
+            }
+        }
+    }
+
+    private fun refreshSessionCounters(sessionId: String) {
+        if (!::database.isInitialized) {
+            return
+        }
+        lifecycleScope.launch {
+            sessionCounters = loadCounters(sessionId)
+        }
     }
 
     private fun refreshSessionHistory() {
@@ -144,28 +175,34 @@ class MainActivity : ComponentActivity() {
             sessionHistory = withContext(Dispatchers.IO) {
                 val dao = database.probeRecordDao()
                 dao.sessions().map { session ->
-                    val pending = dao.countByStatus(session.sessionId, "pending")
-                    val synced = dao.countByStatus(session.sessionId, "synced")
-                    val failed = dao.countByStatus(session.sessionId, "failed")
                     SessionSummary(
                         sessionId = session.sessionId,
                         receiverUrl = session.receiverUrl,
-                        counters = TelemetryCounters(
-                            collected = pending + synced + failed,
-                            pending = pending,
-                            synced = synced,
-                            failed = failed
-                        )
+                        counters = loadCounters(session.sessionId)
                     )
                 }
             }
         }
     }
 
+    private suspend fun loadCounters(sessionId: String): TelemetryCounters = withContext(Dispatchers.IO) {
+        val dao = database.probeRecordDao()
+        val pending = dao.countByStatus(sessionId, "pending")
+        val synced = dao.countByStatus(sessionId, "synced")
+        val failed = dao.countByStatus(sessionId, "failed")
+        TelemetryCounters(
+            collected = pending + synced + failed,
+            pending = pending,
+            synced = synced,
+            failed = failed
+        )
+    }
+
     private fun deleteSession(sessionId: String) {
         if (pairingPayload?.sessionId == sessionId) {
             stopProbeService()
             pairingPayload = null
+            sessionCounters = TelemetryCounters()
             showingHistory = false
         }
         lifecycleScope.launch {
