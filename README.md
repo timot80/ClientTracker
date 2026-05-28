@@ -363,6 +363,13 @@ By default, the audit shows only full, high, or unknown filesystem rows. Use
 `--all` for inventory-style output. `--output` writes the same visible rows plus
 failure records to CSV.
 
+To reload APs whose `/tmp` filesystem is exactly `100%` used, opt in with both
+reload flags. Other full mounts are reported but do not trigger reload:
+
+```bash
+wifiops ap filesystems --config config.yaml --wlc wlc-93 --reload-full-tmp --confirm-reload-full-tmp
+```
+
 Optional defaults:
 
 ```yaml
@@ -380,13 +387,15 @@ Standalone use is also available when the package is not installed:
 
 ```bash
 python ap_filesystem_audit_standalone.py --config ap_filesystem_audit_standalone.example.yaml
-python ap_filesystem_audit_standalone.py --config config.yaml --wlc wlc-93 --output /tmp/wlc-93-filesystems.csv
-python ap_filesystem_audit_standalone.py --config config.yaml --reload-full-tmp --confirm-reload-full-tmp
+python ap_filesystem_audit_standalone.py --config ap_filesystem_audit_standalone.yaml --wlc wlc-93 --output /tmp/wlc-93-filesystems.csv
+python ap_filesystem_audit_standalone.py --config ap_filesystem_audit_standalone.yaml --reload-full-tmp --confirm-reload-full-tmp
 ```
 
 The standalone script has the same `/tmp` reload guard as the package command:
 reload is disabled unless both reload flags are present, and it only reloads an
-AP when `/tmp` is exactly `100%` used.
+AP when `/tmp` is exactly `100%` used. The standalone YAML uses plaintext
+`wlc`/`wlcs` and `ap` credentials; it does not resolve `credential_profile` or
+keyring references from the package `config.yaml`.
 
 ## Example Output
 
