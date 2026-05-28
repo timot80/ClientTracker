@@ -27,6 +27,7 @@ def test_macos_installer_script_has_safe_offline_install_contract():
     assert "cp -R \"$BUNDLE_DIR/launchers/.\" \"$INSTALL_DIR/bin/\"" in text
     assert "if [[ ! -f \"$INSTALL_DIR/config.yaml\" ]]" in text
     assert "\"$INSTALL_DIR/bin/wifiops-check\"" in text
+    assert "mapfile" not in text
 
 
 def test_macos_installer_and_launchers_are_executable():
@@ -61,6 +62,20 @@ def test_bundle_readme_explains_install_and_unsigned_macos_fallback():
     assert "~/Applications/WifiOps" in text
     assert "right-click" in text
     assert "./install.command" in text
+
+
+def test_bundle_builder_creates_self_contained_zip_layout():
+    text = BUILDER.read_text(encoding="utf-8")
+
+    assert text.startswith("#!/usr/bin/env bash\nset -euo pipefail\n")
+    assert "python\" -m build --wheel" in text
+    assert "pip download" in text
+    assert "packaging/macos/install.command" in text
+    assert "packaging/macos/launchers" in text
+    assert "config.example.yaml" in text
+    assert "zip -qr" in text
+    assert "wifiops-macos-${VERSION}.zip" in text
+    assert "mapfile" not in text
 
 
 def _launcher_paths() -> list[Path]:

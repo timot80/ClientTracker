@@ -19,7 +19,10 @@ import sys
 raise SystemExit(1 if sys.version_info < (3, 10) else 0)
 PY
 
-mapfile -t WHEELS < <(find "$BUNDLE_DIR/wheels" -maxdepth 1 -name 'wifiops-*.whl' -print)
+WHEELS=()
+while IFS= read -r wheel; do
+  WHEELS+=("$wheel")
+done < <(find "$BUNDLE_DIR/wheels" -maxdepth 1 -name 'wifiops-*.whl' -print)
 if [[ "${#WHEELS[@]}" -ne 1 ]]; then
   fail "Expected exactly one wifiops wheel in $BUNDLE_DIR/wheels, found ${#WHEELS[@]}."
 fi
