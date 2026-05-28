@@ -1,5 +1,6 @@
 .worktrees
 .worktrees/
+.env
 config.yaml
 __pycache__/
 *.py[cod]
