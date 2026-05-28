@@ -17,12 +17,14 @@ def row_status(row: APFilesystemRow, config: APFilesystemAuditConfig) -> str:
 
 def filter_ap_targets(targets: list[APTarget], config: APFilesystemAuditConfig) -> list[APTarget]:
     filtered = list(targets)
-    if config.ap_names:
+    if config.ap_names or config.ap_hosts:
         allowed_names = set(config.ap_names)
-        filtered = [target for target in filtered if target.name in allowed_names]
-    if config.ap_hosts:
         allowed_hosts = set(config.ap_hosts)
-        filtered = [target for target in filtered if target.host in allowed_hosts]
+        filtered = [
+            target
+            for target in filtered
+            if target.name in allowed_names or target.host in allowed_hosts
+        ]
     if config.include:
         filtered = [
             target

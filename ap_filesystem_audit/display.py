@@ -41,4 +41,12 @@ def build_filesystem_table(snapshot: APFilesystemSnapshot, config: APFilesystemA
             failures.add_row(failure.wlc_name, failure.ap_name, failure.ap_host, failure.message)
         renderables.append(failures)
 
+    if snapshot.parser_warnings:
+        warnings = Table(title="Parser Warnings")
+        for column in ("Status", "Warning"):
+            warnings.add_column(column)
+        for warning in snapshot.parser_warnings:
+            warnings.add_row("UNKNOWN", warning)
+        renderables.append(warnings)
+
     return Group(*renderables)

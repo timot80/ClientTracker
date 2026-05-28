@@ -39,6 +39,21 @@ def collect_ap_filesystems(
         conn.send_command("terminal length 0", expect_string=r"[>#]")
         output = conn.send_command("sh filesystems", expect_string=r"[>#]")
         snapshot = parse_filesystems(output)
+        parser_warnings = [f"{target.name}: {warning}" for warning in snapshot.parser_warnings]
+        if not snapshot.rows:
+            return APFilesystemSnapshot(
+                failures=[
+                    APFilesystemFailure(
+                        wlc_name=target.wlc_name,
+                        wlc_host=target.wlc_host,
+                        ap_name=target.name,
+                        ap_host=target.host,
+                        message="no filesystem rows parsed",
+                    )
+                ],
+                parser_warnings=parser_warnings,
+                timestamp=snapshot.timestamp,
+            )
         return APFilesystemSnapshot(
             rows=[
                 replace(
@@ -51,7 +66,7 @@ def collect_ap_filesystems(
                 for row in snapshot.rows
             ],
             failures=snapshot.failures,
-            parser_warnings=snapshot.parser_warnings,
+            parser_warnings=parser_warnings,
             timestamp=snapshot.timestamp,
         )
     finally:

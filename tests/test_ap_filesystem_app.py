@@ -40,6 +40,27 @@ def test_collect_ap_filesystems_runs_sh_filesystems(monkeypatch):
     assert fake.commands[-1][0] == "sh filesystems"
 
 
+def test_collect_ap_filesystems_reports_empty_parse_as_failure(monkeypatch):
+    class FakeConnection:
+        def send_command(self, command, **_kwargs):
+            if command == "terminal length 0":
+                return ""
+            return "unexpected output\nbad row\n"
+
+        def disconnect(self):
+            pass
+
+    monkeypatch.setattr("ap_filesystem_audit.app.ConnectHandler", lambda **_kwargs: FakeConnection())
+    target = APTarget("wlc-1", "192.0.2.10", "AP-1", "10.1.2.3")
+
+    snapshot = collect_ap_filesystems(target, APCredentials("u", "p"), APFilesystemAuditConfig())
+
+    assert snapshot.rows == []
+    assert snapshot.failures
+    assert snapshot.failures[0].ap_name == "AP-1"
+    assert "no filesystem rows parsed" in snapshot.failures[0].message
+
+
 def test_run_audit_renders_failures_and_returns_nonzero(monkeypatch):
     def fake_discover(_target):
         return [APTarget("wlc-1", "192.0.2.10", "AP-1", "10.1.2.3")]

@@ -44,3 +44,16 @@ def test_write_csv_all_includes_ok_rows(tmp_path):
         rows = list(csv.DictReader(handle))
     assert rows[0]["ap_name"] == "OK"
     assert rows[0]["status"] == "OK"
+
+
+def test_write_csv_exports_parser_warnings_as_unknown_failures(tmp_path):
+    path = tmp_path / "filesystems.csv"
+    snapshot = APFilesystemSnapshot(parser_warnings=["AP-1: line 2: skipped malformed row"])
+
+    write_csv(path, snapshot, APFilesystemAuditConfig())
+
+    with path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    assert rows[0]["record_type"] == "failure"
+    assert rows[0]["status"] == "UNKNOWN"
+    assert rows[0]["error"] == "AP-1: line 2: skipped malformed row"

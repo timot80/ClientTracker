@@ -57,3 +57,15 @@ def test_build_filesystem_table_renders_failures():
     rendered = console.export_text()
     assert "AP-1" in rendered
     assert "ssh failed" in rendered
+
+
+def test_build_filesystem_table_renders_parser_warnings():
+    console = Console(record=True, width=180)
+    snapshot = APFilesystemSnapshot(parser_warnings=["AP-1: line 2: skipped malformed row"])
+
+    console.print(build_filesystem_table(snapshot, APFilesystemAuditConfig()))
+
+    rendered = console.export_text()
+    assert "Parser Warnings" in rendered
+    assert "UNKNOWN" in rendered
+    assert "AP-1: line 2: skipped malformed row" in rendered

@@ -69,3 +69,22 @@ def write_csv(path: str | Path, snapshot: APFilesystemSnapshot, config: APFilesy
                     "error": failure.message,
                 }
             )
+        for warning in snapshot.parser_warnings:
+            writer.writerow(
+                {
+                    "record_type": "failure",
+                    "wlc_name": "",
+                    "wlc_host": "",
+                    "ap_name": "",
+                    "ap_host": "",
+                    "filesystem": "",
+                    "mount": "",
+                    "size": "",
+                    "used": "",
+                    "available": "",
+                    "used_percent": "",
+                    "status": "UNKNOWN",
+                    "notes": "",
+                    "error": warning,
+                }
+            )

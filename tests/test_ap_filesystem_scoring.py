@@ -54,3 +54,18 @@ def test_filter_ap_targets_applies_exact_then_wildcard_filters():
     assert [target.host for target in filter_ap_targets(targets, APFilesystemAuditConfig(ap_hosts=("10.0.0.2",)))] == [
         "10.0.0.2"
     ]
+
+
+def test_filter_ap_targets_combines_exact_names_and_hosts_as_union():
+    targets = [
+        APTarget(wlc_name="wlc-1", wlc_host="192.0.2.10", name="AP-BY-NAME", host="10.0.0.1"),
+        APTarget(wlc_name="wlc-1", wlc_host="192.0.2.10", name="AP-BY-HOST", host="10.0.0.2"),
+        APTarget(wlc_name="wlc-1", wlc_host="192.0.2.10", name="AP-SKIP", host="10.0.0.3"),
+    ]
+
+    filtered = filter_ap_targets(
+        targets,
+        APFilesystemAuditConfig(ap_names=("AP-BY-NAME",), ap_hosts=("10.0.0.2",)),
+    )
+
+    assert [target.name for target in filtered] == ["AP-BY-NAME", "AP-BY-HOST"]
