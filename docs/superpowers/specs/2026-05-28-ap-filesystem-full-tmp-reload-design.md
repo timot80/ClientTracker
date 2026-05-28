@@ -24,9 +24,9 @@ Reload output is retained in the in-memory snapshot and exported to CSV. Any rel
 
 ## Output And CSV
 
-CLI output keeps the existing filesystem table and adds a reload results table when reload mode is used. CSV exports add reload fields to each filesystem row:
+CLI output keeps the existing filesystem table and adds a reload results table only when reload is triggered or fails. CSV exports add reload fields to each filesystem row:
 
-- `reload_action`: empty, `skipped`, `triggered`, or `failed`
+- `reload_action`: empty, `triggered`, or `failed`
 - `reload_output`: device response or failure detail
 
 ## Testing

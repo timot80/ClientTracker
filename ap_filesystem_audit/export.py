@@ -21,6 +21,8 @@ CSV_FIELDS = [
     "used_percent",
     "status",
     "notes",
+    "reload_action",
+    "reload_output",
     "error",
 ]
 
@@ -31,7 +33,12 @@ def write_csv(path: str | Path, snapshot: APFilesystemSnapshot, config: APFilesy
     with output_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=CSV_FIELDS)
         writer.writeheader()
+        reloads_by_ap = {
+            (result.wlc_name, result.wlc_host, result.ap_name, result.ap_host): result
+            for result in snapshot.reload_results
+        }
         for row in visible_rows(snapshot.rows, config):
+            reload_result = reloads_by_ap.get((row.wlc_name, row.wlc_host, row.ap_name, row.ap_host))
             writer.writerow(
                 {
                     "record_type": "filesystem",
@@ -47,6 +54,8 @@ def write_csv(path: str | Path, snapshot: APFilesystemSnapshot, config: APFilesy
                     "used_percent": "" if row.used_percent is None else row.used_percent,
                     "status": row_status(row, config),
                     "notes": "; ".join(row.notes),
+                    "reload_action": "" if reload_result is None else reload_result.action,
+                    "reload_output": "" if reload_result is None else reload_result.output,
                     "error": "",
                 }
             )
@@ -66,6 +75,8 @@ def write_csv(path: str | Path, snapshot: APFilesystemSnapshot, config: APFilesy
                     "used_percent": "",
                     "status": "",
                     "notes": "",
+                    "reload_action": "",
+                    "reload_output": "",
                     "error": failure.message,
                 }
             )
@@ -85,6 +96,8 @@ def write_csv(path: str | Path, snapshot: APFilesystemSnapshot, config: APFilesy
                     "used_percent": "",
                     "status": "UNKNOWN",
                     "notes": "",
+                    "reload_action": "",
+                    "reload_output": "",
                     "error": warning,
                 }
             )

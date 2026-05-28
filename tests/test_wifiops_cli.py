@@ -273,6 +273,23 @@ def test_ap_filesystems_delegates_to_ap_filesystem_audit():
     fs_main.assert_called_once_with(["--config", "config.yaml", "--include", "MBY-*"])
 
 
+def test_ap_filesystems_preserves_reload_options():
+    fs_main = Mock(return_value=0)
+
+    with patch("ap_filesystem_audit.cli.main", fs_main):
+        exit_code = main(
+            [
+                "ap",
+                "filesystems",
+                "--reload-full-tmp",
+                "--confirm-reload-full-tmp",
+            ]
+        )
+
+    assert exit_code == 0
+    fs_main.assert_called_once_with(["--reload-full-tmp", "--confirm-reload-full-tmp"])
+
+
 def test_c9800_client_defaults_to_infra_mode():
     client_main = Mock(return_value=None)
 

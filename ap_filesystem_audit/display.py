@@ -49,4 +49,18 @@ def build_filesystem_table(snapshot: APFilesystemSnapshot, config: APFilesystemA
             warnings.add_row("UNKNOWN", warning)
         renderables.append(warnings)
 
+    if snapshot.reload_results:
+        reloads = Table(title="Reload Results")
+        for column in ("WLC", "AP", "AP IP", "Action", "Output"):
+            reloads.add_column(column)
+        for result in snapshot.reload_results:
+            reloads.add_row(
+                result.wlc_name,
+                result.ap_name,
+                result.ap_host,
+                result.action,
+                result.output,
+            )
+        renderables.append(reloads)
+
     return Group(*renderables)

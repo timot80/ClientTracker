@@ -23,6 +23,8 @@ class APFilesystemAuditConfig:
     show_all: bool = False
     ap_concurrency: int = 20
     output: str = ""
+    reload_full_tmp: bool = False
+    confirm_reload_full_tmp: bool = False
 
 
 @dataclass(frozen=True)
@@ -66,8 +68,19 @@ class APFilesystemFailure:
 
 
 @dataclass(frozen=True)
+class APReloadResult:
+    wlc_name: str = ""
+    wlc_host: str = ""
+    ap_name: str = ""
+    ap_host: str = ""
+    action: str = ""
+    output: str = ""
+
+
+@dataclass(frozen=True)
 class APFilesystemSnapshot:
     rows: list[APFilesystemRow] = field(default_factory=list)
     failures: list[APFilesystemFailure] = field(default_factory=list)
     parser_warnings: list[str] = field(default_factory=list)
+    reload_results: list[APReloadResult] = field(default_factory=list)
     timestamp: datetime = field(default_factory=datetime.now)

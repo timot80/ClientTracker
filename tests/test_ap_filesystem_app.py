@@ -11,6 +11,12 @@ Filesystem Size Used Available Use% Mounted on
 none 95.4M 95.0M 376.0K 100% /tmp
 """
 
+FULL_PART_OUTPUT = """
+Filesystem Size Used Available Use% Mounted on
+none 95.4M 1.0M 94.4M 1% /tmp
+/dev/loop1 18.2M 18.2M 0 100% /part2/app
+"""
+
 
 def test_collect_ap_filesystems_runs_sh_filesystems(monkeypatch):
     class FakeConnection:
@@ -59,6 +65,105 @@ def test_collect_ap_filesystems_reports_empty_parse_as_failure(monkeypatch):
     assert snapshot.failures
     assert snapshot.failures[0].ap_name == "AP-1"
     assert "no filesystem rows parsed" in snapshot.failures[0].message
+
+
+def test_collect_ap_filesystems_reloads_when_tmp_is_full(monkeypatch):
+    class FakeConnection:
+        def __init__(self):
+            self.calls = []
+
+        def send_command(self, command, **_kwargs):
+            self.calls.append(("send_command", command))
+            if command == "terminal length 0":
+                return ""
+            return FILESYSTEM_OUTPUT
+
+        def send_command_timing(self, command, **_kwargs):
+            self.calls.append(("send_command_timing", command))
+            if command == "reload":
+                return "Proceed with reload? [confirm]"
+            return "cli: AP Rebooting: CLI triggered reboot(reload command)"
+
+        def disconnect(self):
+            pass
+
+    fake = FakeConnection()
+    monkeypatch.setattr("ap_filesystem_audit.app.ConnectHandler", lambda **_kwargs: fake)
+    target = APTarget("wlc-1", "192.0.2.10", "AP-1", "10.1.2.3")
+
+    snapshot = collect_ap_filesystems(
+        target,
+        APCredentials("u", "p"),
+        APFilesystemAuditConfig(reload_full_tmp=True, confirm_reload_full_tmp=True),
+    )
+
+    assert snapshot.failures == []
+    assert len(snapshot.reload_results) == 1
+    assert snapshot.reload_results[0].action == "triggered"
+    assert ("send_command_timing", "reload") in fake.calls
+    assert ("send_command_timing", "\r") in fake.calls
+
+
+def test_collect_ap_filesystems_does_not_reload_when_only_non_tmp_mount_is_full(monkeypatch):
+    class FakeConnection:
+        def __init__(self):
+            self.calls = []
+
+        def send_command(self, command, **_kwargs):
+            self.calls.append(("send_command", command))
+            if command == "terminal length 0":
+                return ""
+            return FULL_PART_OUTPUT
+
+        def send_command_timing(self, command, **_kwargs):
+            self.calls.append(("send_command_timing", command))
+            return ""
+
+        def disconnect(self):
+            pass
+
+    fake = FakeConnection()
+    monkeypatch.setattr("ap_filesystem_audit.app.ConnectHandler", lambda **_kwargs: fake)
+    target = APTarget("wlc-1", "192.0.2.10", "AP-1", "10.1.2.3")
+
+    snapshot = collect_ap_filesystems(
+        target,
+        APCredentials("u", "p"),
+        APFilesystemAuditConfig(reload_full_tmp=True, confirm_reload_full_tmp=True),
+    )
+
+    assert snapshot.failures == []
+    assert snapshot.reload_results == []
+    assert ("send_command_timing", "reload") not in fake.calls
+
+
+def test_collect_ap_filesystems_records_reload_failure_when_confirmation_missing(monkeypatch):
+    class FakeConnection:
+        def send_command(self, command, **_kwargs):
+            if command == "terminal length 0":
+                return ""
+            return FILESYSTEM_OUTPUT
+
+        def send_command_timing(self, command, **_kwargs):
+            assert command == "reload"
+            return "reload rejected"
+
+        def disconnect(self):
+            pass
+
+    monkeypatch.setattr("ap_filesystem_audit.app.ConnectHandler", lambda **_kwargs: FakeConnection())
+    target = APTarget("wlc-1", "192.0.2.10", "AP-1", "10.1.2.3")
+
+    snapshot = collect_ap_filesystems(
+        target,
+        APCredentials("u", "p"),
+        APFilesystemAuditConfig(reload_full_tmp=True, confirm_reload_full_tmp=True),
+    )
+
+    assert len(snapshot.reload_results) == 1
+    assert snapshot.reload_results[0].action == "failed"
+    assert snapshot.failures
+    assert "confirmation prompt not received" in snapshot.failures[0].message
 
 
 def test_run_audit_renders_failures_and_returns_nonzero(monkeypatch):

@@ -13,6 +13,7 @@ from ap_filesystem_audit.models import (
     APFilesystemAuditConfig,
     APFilesystemFailure,
     APFilesystemSnapshot,
+    APReloadResult,
     APTarget,
 )
 from ap_filesystem_audit.parser import parse_filesystems
@@ -54,19 +55,22 @@ def collect_ap_filesystems(
                 parser_warnings=parser_warnings,
                 timestamp=snapshot.timestamp,
             )
+        rows = [
+            replace(
+                row,
+                wlc_name=target.wlc_name,
+                wlc_host=target.wlc_host,
+                ap_name=target.name,
+                ap_host=target.host,
+            )
+            for row in snapshot.rows
+        ]
+        reload_results, reload_failures = _maybe_reload_full_tmp(conn, target, rows, config)
         return APFilesystemSnapshot(
-            rows=[
-                replace(
-                    row,
-                    wlc_name=target.wlc_name,
-                    wlc_host=target.wlc_host,
-                    ap_name=target.name,
-                    ap_host=target.host,
-                )
-                for row in snapshot.rows
-            ],
-            failures=snapshot.failures,
+            rows=rows,
+            failures=[*snapshot.failures, *reload_failures],
             parser_warnings=parser_warnings,
+            reload_results=reload_results,
             timestamp=snapshot.timestamp,
         )
     finally:
@@ -84,6 +88,7 @@ def run_audit(
     rows = []
     failures: list[APFilesystemFailure] = []
     parser_warnings: list[str] = []
+    reload_results: list[APReloadResult] = []
 
     discovery_results = run_bounded(wlc_targets, discover_aps_from_wlc, wlc_concurrency)
     discovered: list[APTarget] = []
@@ -120,8 +125,14 @@ def run_audit(
             rows.extend(result.rows)
             failures.extend(result.failures)
             parser_warnings.extend(result.parser_warnings)
+            reload_results.extend(result.reload_results)
 
-    snapshot = APFilesystemSnapshot(rows=rows, failures=failures, parser_warnings=parser_warnings)
+    snapshot = APFilesystemSnapshot(
+        rows=rows,
+        failures=failures,
+        parser_warnings=parser_warnings,
+        reload_results=reload_results,
+    )
     console.print(build_filesystem_table(snapshot, audit_config))
     if audit_config.output:
         try:
@@ -130,6 +141,52 @@ def run_audit(
             console.print(f"Failed to write CSV output: {exc}")
             return 1
     return 1 if failures else 0
+
+
+def _maybe_reload_full_tmp(
+    conn,
+    target: APTarget,
+    rows: list,
+    config: APFilesystemAuditConfig,
+) -> tuple[list[APReloadResult], list[APFilesystemFailure]]:
+    if not config.reload_full_tmp:
+        return [], []
+
+    identity = {
+        "wlc_name": target.wlc_name,
+        "wlc_host": target.wlc_host,
+        "ap_name": target.name,
+        "ap_host": target.host,
+    }
+    if not any(row.mount == "/tmp" and row.used_percent == 100 for row in rows):
+        return [], []
+
+    try:
+        output = conn.send_command_timing("reload", read_timeout=30, last_read=3)
+        if "confirm" not in output.lower():
+            message = f"reload confirmation prompt not received: {output}"
+            return (
+                [APReloadResult(**identity, action="failed", output=message)],
+                [APFilesystemFailure(**identity, message=message)],
+            )
+        confirm_output = conn.send_command_timing("\r", read_timeout=30, last_read=3)
+    except Exception as exc:
+        message = f"reload failed: {exc}"
+        return (
+            [APReloadResult(**identity, action="failed", output=message)],
+            [APFilesystemFailure(**identity, message=message)],
+        )
+
+    return (
+        [
+            APReloadResult(
+                **identity,
+                action="triggered",
+                output="\n".join(part for part in (output, confirm_output) if part),
+            )
+        ],
+        [],
+    )
 
 
 def _dedupe_ap_targets(targets: list[APTarget]) -> list[APTarget]:

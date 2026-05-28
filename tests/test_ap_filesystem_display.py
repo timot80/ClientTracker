@@ -1,7 +1,13 @@
 from rich.console import Console
 
 from ap_filesystem_audit.display import build_filesystem_table
-from ap_filesystem_audit.models import APFilesystemAuditConfig, APFilesystemFailure, APFilesystemRow, APFilesystemSnapshot
+from ap_filesystem_audit.models import (
+    APFilesystemAuditConfig,
+    APFilesystemFailure,
+    APFilesystemRow,
+    APFilesystemSnapshot,
+    APReloadResult,
+)
 
 
 def row(ap_name="AP-1", used_percent=100):
@@ -69,3 +75,25 @@ def test_build_filesystem_table_renders_parser_warnings():
     assert "Parser Warnings" in rendered
     assert "UNKNOWN" in rendered
     assert "AP-1: line 2: skipped malformed row" in rendered
+
+
+def test_build_filesystem_table_renders_reload_results():
+    console = Console(record=True, width=180)
+    snapshot = APFilesystemSnapshot(
+        reload_results=[
+            APReloadResult(
+                wlc_name="wlc-1",
+                ap_name="AP-1",
+                ap_host="10.1.2.3",
+                action="triggered",
+                output="cli: AP Rebooting",
+            )
+        ]
+    )
+
+    console.print(build_filesystem_table(snapshot, APFilesystemAuditConfig()))
+
+    rendered = console.export_text()
+    assert "Reload Results" in rendered
+    assert "AP-1" in rendered
+    assert "triggered" in rendered

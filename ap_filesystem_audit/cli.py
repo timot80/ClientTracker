@@ -29,6 +29,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--wlc-concurrency", type=int, help="Maximum WLCs to query concurrently")
     parser.add_argument("--ap-concurrency", type=int, help="Maximum APs to query concurrently")
     parser.add_argument("--output", help="Optional CSV output path")
+    parser.add_argument(
+        "--reload-full-tmp",
+        action="store_true",
+        help="Reload APs only when the /tmp filesystem is exactly 100%% used",
+    )
+    parser.add_argument(
+        "--confirm-reload-full-tmp",
+        action="store_true",
+        help="Confirm AP reloads for --reload-full-tmp",
+    )
     return parser.parse_args(argv)
 
 
@@ -54,6 +64,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             audit_config = replace(audit_config, ap_concurrency=args.ap_concurrency)
         if args.output:
             audit_config = replace(audit_config, output=args.output)
+        if args.reload_full_tmp and not args.confirm_reload_full_tmp:
+            raise ValueError("--reload-full-tmp requires --confirm-reload-full-tmp")
+        if args.reload_full_tmp:
+            audit_config = replace(
+                audit_config,
+                reload_full_tmp=True,
+                confirm_reload_full_tmp=args.confirm_reload_full_tmp,
+            )
 
         targets = select_wlc_targets(config.wlc_targets, tuple(args.wlc))
         concurrency = args.wlc_concurrency if args.wlc_concurrency is not None else config.wlc_concurrency

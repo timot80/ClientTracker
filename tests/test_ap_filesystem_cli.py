@@ -28,6 +28,8 @@ def test_parse_args_supports_filesystem_options():
             "10",
             "--output",
             "out.csv",
+            "--reload-full-tmp",
+            "--confirm-reload-full-tmp",
         ]
     )
 
@@ -41,6 +43,8 @@ def test_parse_args_supports_filesystem_options():
     assert args.wlc_concurrency == 4
     assert args.ap_concurrency == 10
     assert args.output == "out.csv"
+    assert args.reload_full_tmp is True
+    assert args.confirm_reload_full_tmp is True
 
 
 def test_main_loads_config_applies_overrides_and_runs_audit():
@@ -60,3 +64,36 @@ def test_main_loads_config_applies_overrides_and_runs_audit():
     passed_config = run_audit.call_args.args[2]
     assert passed_config.include == ("MBY-*",)
     assert passed_config.output == "out.csv"
+
+
+def test_main_requires_reload_confirmation(capsys):
+    assert main(["--config", "config.yaml", "--reload-full-tmp"]) == 1
+
+    captured = capsys.readouterr()
+    assert "--reload-full-tmp requires --confirm-reload-full-tmp" in captured.err
+
+
+def test_main_passes_reload_flags_to_audit():
+    loaded = Mock()
+    loaded.wlc_targets = [Mock(name="wlc-1")]
+    loaded.ap_credentials = APCredentials("u", "p")
+    loaded.audit = APFilesystemAuditConfig()
+    loaded.wlc_concurrency = 3
+    run_audit = Mock(return_value=0)
+
+    with (
+        patch("ap_filesystem_audit.cli.load_config", return_value=loaded),
+        patch("ap_filesystem_audit.cli.run_audit", run_audit),
+    ):
+        assert main(
+            [
+                "--config",
+                "config.yaml",
+                "--reload-full-tmp",
+                "--confirm-reload-full-tmp",
+            ]
+        ) == 0
+
+    passed_config = run_audit.call_args.args[2]
+    assert passed_config.reload_full_tmp is True
+    assert passed_config.confirm_reload_full_tmp is True

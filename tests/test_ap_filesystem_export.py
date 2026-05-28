@@ -1,7 +1,13 @@
 import csv
 
 from ap_filesystem_audit.export import write_csv
-from ap_filesystem_audit.models import APFilesystemAuditConfig, APFilesystemFailure, APFilesystemRow, APFilesystemSnapshot
+from ap_filesystem_audit.models import (
+    APFilesystemAuditConfig,
+    APFilesystemFailure,
+    APFilesystemRow,
+    APFilesystemSnapshot,
+    APReloadResult,
+)
 
 
 def row(ap_name="AP-1", used_percent=100):
@@ -57,3 +63,27 @@ def test_write_csv_exports_parser_warnings_as_unknown_failures(tmp_path):
     assert rows[0]["record_type"] == "failure"
     assert rows[0]["status"] == "UNKNOWN"
     assert rows[0]["error"] == "AP-1: line 2: skipped malformed row"
+
+
+def test_write_csv_exports_reload_fields_for_filesystem_rows(tmp_path):
+    path = tmp_path / "filesystems.csv"
+    snapshot = APFilesystemSnapshot(
+        rows=[row()],
+        reload_results=[
+            APReloadResult(
+                wlc_name="wlc-1",
+                wlc_host="192.0.2.10",
+                ap_name="AP-1",
+                ap_host="10.1.2.3",
+                action="triggered",
+                output="cli: AP Rebooting",
+            )
+        ],
+    )
+
+    write_csv(path, snapshot, APFilesystemAuditConfig())
+
+    with path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    assert rows[0]["reload_action"] == "triggered"
+    assert rows[0]["reload_output"] == "cli: AP Rebooting"

@@ -127,6 +127,16 @@ def build_parser() -> argparse.ArgumentParser:
     filesystems.add_argument("--wlc-concurrency", type=int, help="Maximum WLCs to query concurrently")
     filesystems.add_argument("--ap-concurrency", type=int, help="Maximum APs to query concurrently")
     filesystems.add_argument("--output", help="Optional CSV output path")
+    filesystems.add_argument(
+        "--reload-full-tmp",
+        action="store_true",
+        help="Reload APs only when the /tmp filesystem is exactly 100%% used",
+    )
+    filesystems.add_argument(
+        "--confirm-reload-full-tmp",
+        action="store_true",
+        help="Confirm AP reloads for --reload-full-tmp",
+    )
 
     client = subcommands.add_parser("client", help="Local client telemetry tools")
     client_subcommands = client.add_subparsers(dest="client_command", required=True)
