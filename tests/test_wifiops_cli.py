@@ -242,6 +242,27 @@ def test_c9800_ap_ports_delegates_to_ap_port_audit():
     port_main.assert_called_once_with(["--config", "config.yaml", "--include", "MBY-*"])
 
 
+def test_c9800_ap_ports_preserves_multi_wlc_options():
+    port_main = Mock(return_value=0)
+
+    with patch("ap_port_audit.cli.main", port_main):
+        exit_code = main(
+            [
+                "c9800",
+                "ap-ports",
+                "--wlc",
+                "mby-1",
+                "--wlc",
+                "mby-2",
+                "--wlc-concurrency",
+                "5",
+            ]
+        )
+
+    assert exit_code == 0
+    port_main.assert_called_once_with(["--wlc", "mby-1", "--wlc", "mby-2", "--wlc-concurrency", "5"])
+
+
 def test_c9800_client_defaults_to_infra_mode():
     client_main = Mock(return_value=None)
 

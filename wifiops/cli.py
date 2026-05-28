@@ -91,6 +91,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap_ports.add_argument("--exclude", action="append", default=[], help="AP name wildcard to exclude")
     ap_ports.add_argument("--all", action="store_true", help="Show all AP ports, including healthy rows")
     ap_ports.add_argument("--speed-threshold", type=int, help="Minimum expected negotiated speed in Mbps")
+    ap_ports.add_argument("--wlc", action="append", default=[], help="Named WLC to include; repeatable")
+    ap_ports.add_argument("--wlc-concurrency", type=int, help="Maximum WLCs to query concurrently")
 
     c9800_client = c9800_subcommands.add_parser(
         "client",

@@ -8,6 +8,7 @@ from ap_port_audit.models import APPortAuditConfig, APPortSnapshot
 from ap_port_audit.parser import parse_ethernet_statistics
 from ap_port_audit.wlc import APPortAuditSession
 from ap_radio_monitor.models import WLCConfig
+from wifiops.wlc_targets import WlcTarget
 
 
 def collect_once(session, config: APPortAuditConfig) -> APPortSnapshot:
@@ -39,6 +40,16 @@ def run_once(wlc_config: WLCConfig, audit_config: APPortAuditConfig, console: Co
             return 0
     finally:
         session.disconnect()
+
+
+def run_multi(
+    targets: list[WlcTarget],
+    audit_config: APPortAuditConfig,
+    concurrency: int,
+    console: Console,
+) -> int:
+    del concurrency
+    return run_once(targets[0].config, audit_config, console)
 
 
 def _collect_with_error_handling(

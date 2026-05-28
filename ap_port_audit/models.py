@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from ap_radio_monitor.models import WLCConfig
+from wifiops.wlc_targets import WlcTarget
 
 
 @dataclass(frozen=True)
@@ -16,8 +17,13 @@ class APPortAuditConfig:
 
 @dataclass(frozen=True)
 class APPortConfig:
-    wlc: WLCConfig
+    wlc_targets: list[WlcTarget]
     ap_ports: APPortAuditConfig = field(default_factory=APPortAuditConfig)
+    wlc_concurrency: int = 3
+
+    @property
+    def wlc(self) -> WLCConfig:
+        return self.wlc_targets[0].config
 
 
 @dataclass(frozen=True)

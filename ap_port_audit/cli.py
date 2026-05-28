@@ -8,8 +8,9 @@ from pathlib import Path
 
 from rich.console import Console
 
-from ap_port_audit.app import run_once
+from ap_port_audit.app import run_multi
 from ap_port_audit.config import load_config
+from wifiops.wlc_targets import select_wlc_targets
 
 
 DEFAULT_CONFIG = Path(__file__).resolve().parent.parent / "config.yaml"
@@ -28,6 +29,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=int,
         help="Minimum expected negotiated speed in Mbps. Defaults to config or 1000.",
     )
+    parser.add_argument("--wlc", action="append", default=[], help="Named WLC to include; repeatable")
+    parser.add_argument("--wlc-concurrency", type=int, help="Maximum WLCs to query concurrently")
     return parser.parse_args(argv)
 
 
@@ -45,7 +48,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             audit_config = replace(audit_config, show_all=True)
         if args.speed_threshold is not None:
             audit_config = replace(audit_config, speed_threshold=args.speed_threshold)
-        return run_once(config.wlc, audit_config, console)
+        targets = select_wlc_targets(config.wlc_targets, tuple(args.wlc))
+        concurrency = args.wlc_concurrency if args.wlc_concurrency is not None else config.wlc_concurrency
+        return run_multi(targets, audit_config, concurrency, console)
     except Exception as exc:
         print(str(exc), file=sys.stderr)
         return 1
