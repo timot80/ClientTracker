@@ -21,7 +21,24 @@ def test_android_csv_logger_writes_probe_columns(tmp_path):
             client_timestamp="2026-05-27T14:05:31-07:00",
             app_version="0.1.0",
             android_api_level=35,
-            payload={"ssid": "corp-wifi", "bssid": "aa:bb:cc:dd:ee:ff", "rssi": -63},
+            payload={
+                "ssid": "corp-wifi",
+                "bssid": "aa:bb:cc:dd:ee:ff",
+                "rssi": -63,
+                "frequency_mhz": 5180,
+                "channel": "36",
+                "tx_link_mbps": 432,
+                "rx_link_mbps": 390,
+                "dns": ["192.0.2.53", "2001:db8::53"],
+                "manufacturer": "Google",
+                "model": "Pixel",
+                "availability": {"ssid": "unavailable_or_redacted"},
+                "probes": {
+                    "gateway": {"ok": True, "latency_ms": 8},
+                    "dns": {"ok": True, "latency_ms": 24, "detail": "93.184.216.34"},
+                    "http": {"ok": True, "latency_ms": 90, "detail": "200"},
+                },
+            },
         ),
         status="accepted",
     )
@@ -31,6 +48,16 @@ def test_android_csv_logger_writes_probe_columns(tmp_path):
     assert rows[0]["session_id"] == "walk_1"
     assert rows[0]["record_id"] == "r1"
     assert rows[0]["local_ssid"] == "corp-wifi"
+    assert rows[0]["local_frequency_mhz"] == "5180"
+    assert rows[0]["tx_link_mbps"] == "432"
+    assert rows[0]["rx_link_mbps"] == "390"
+    assert rows[0]["dns"] == "192.0.2.53;2001:db8::53"
+    assert rows[0]["manufacturer"] == "Google"
+    assert rows[0]["model"] == "Pixel"
+    assert rows[0]["availability"] == "ssid=unavailable_or_redacted"
+    assert rows[0]["probe_gateway"] == "ok 8ms"
+    assert rows[0]["probe_dns"] == "ok 24ms"
+    assert rows[0]["probe_http"] == "ok 90ms"
 
 
 def test_android_csv_logger_writes_ipv6_columns(tmp_path):

@@ -19,11 +19,18 @@ ANDROID_CSV_COLUMNS = (
     "local_ssid",
     "local_bssid",
     "local_channel",
+    "local_frequency_mhz",
     "local_signal",
+    "tx_link_mbps",
+    "rx_link_mbps",
     "local_ipv4_address",
     "local_ipv6_addresses",
     "local_ip_addresses",
     "gateway",
+    "dns",
+    "manufacturer",
+    "model",
+    "availability",
     "probe_gateway",
     "probe_dns",
     "probe_http",
@@ -59,12 +66,19 @@ class AndroidCSVLogger:
                     "status": status,
                     "local_ssid": _string(payload.get("ssid")),
                     "local_bssid": _string(payload.get("bssid")),
-                    "local_channel": _string(payload.get("channel") or payload.get("frequency_mhz")),
+                    "local_channel": _string(payload.get("channel")),
+                    "local_frequency_mhz": _string(payload.get("frequency_mhz")),
                     "local_signal": _string(payload.get("rssi")),
+                    "tx_link_mbps": _string(payload.get("tx_link_mbps")),
+                    "rx_link_mbps": _string(payload.get("rx_link_mbps")),
                     "local_ipv4_address": _string(payload.get("ipv4_address")),
                     "local_ipv6_addresses": _string_list(payload.get("ipv6_addresses")),
                     "local_ip_addresses": _string_list(payload.get("ip_addresses")),
                     "gateway": _string(payload.get("gateway")),
+                    "dns": _string_list(payload.get("dns")),
+                    "manufacturer": _string(payload.get("manufacturer")),
+                    "model": _string(payload.get("model")),
+                    "availability": _availability_cell(payload.get("availability")),
                     "probe_gateway": _probe_cell(probes, "gateway"),
                     "probe_dns": _probe_cell(probes, "dns"),
                     "probe_http": _probe_cell(probes, "http"),
@@ -104,3 +118,9 @@ def _string_list(value: Any) -> str:
     if isinstance(value, list):
         return ";".join(str(item) for item in value)
     return str(value)
+
+
+def _availability_cell(value: Any) -> str:
+    if not isinstance(value, dict):
+        return ""
+    return ";".join(f"{key}={value[key]}" for key in sorted(value))

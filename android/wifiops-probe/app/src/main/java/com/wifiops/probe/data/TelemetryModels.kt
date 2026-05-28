@@ -2,6 +2,7 @@ package com.wifiops.probe.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import com.wifiops.probe.telemetry.ProbeResult
 
 @Serializable
 data class TelemetryRecord(
@@ -46,5 +47,8 @@ data class TelemetryPayload(
     val ipAddresses: List<String> = emptyList(),
     val gateway: String? = null,
     val dns: List<String> = emptyList(),
+    val manufacturer: String? = null,
+    val model: String? = null,
+    val probes: Map<String, ProbeResult> = emptyMap(),
     val availability: Map<String, String> = emptyMap()
 )

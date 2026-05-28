@@ -1,6 +1,8 @@
 package com.wifiops.probe.telemetry
 
 import android.net.Network
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -12,8 +14,10 @@ import java.net.InetSocketAddress
 import java.net.URI
 import kotlin.system.measureTimeMillis
 
+@Serializable
 data class ProbeResult(
     val ok: Boolean,
+    @SerialName("latency_ms")
     val latencyMs: Long? = null,
     val detail: String = ""
 )

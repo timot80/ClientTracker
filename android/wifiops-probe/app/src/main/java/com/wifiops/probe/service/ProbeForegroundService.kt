@@ -18,7 +18,10 @@ import com.wifiops.probe.data.SessionEntity
 import com.wifiops.probe.data.TelemetryRecord
 import com.wifiops.probe.sync.ProbeSyncClient
 import com.wifiops.probe.sync.ProbeSyncWorker
+import com.wifiops.probe.telemetry.ActiveProbeRunner
+import com.wifiops.probe.telemetry.ProbeResult
 import com.wifiops.probe.telemetry.WifiTelemetryCollector
+import com.wifiops.probe.telemetry.wifiNetwork
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -34,7 +37,9 @@ import java.time.format.DateTimeFormatter
 class ProbeForegroundService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var database: ProbeDatabase
+    private lateinit var connectivityManager: ConnectivityManager
     private lateinit var collector: WifiTelemetryCollector
+    private val probeRunner = ActiveProbeRunner()
     private lateinit var syncWorker: ProbeSyncWorker
     private var activeSessionId: String? = null
     private var collectionJob: Job? = null
@@ -48,7 +53,7 @@ class ProbeForegroundService : Service() {
             "wifiops-probe.db"
         ).build()
         val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        val connectivityManager = getSystemService(ConnectivityManager::class.java)
+        connectivityManager = getSystemService(ConnectivityManager::class.java)
         collector = WifiTelemetryCollector(wifiManager, connectivityManager)
         syncWorker = ProbeSyncWorker(database.probeRecordDao(), ProbeSyncClient())
         createNotificationChannel()
@@ -122,8 +127,10 @@ class ProbeForegroundService : Service() {
         }
     }
 
-    private fun telemetryRecord(session: SessionEntity): TelemetryRecord {
+    private suspend fun telemetryRecord(session: SessionEntity): TelemetryRecord {
         val nextSequence = ++sequenceNumber
+        val basePayload = collector.collect()
+        val probes = collectActiveProbes(basePayload.gateway, session.receiverUrl)
         return TelemetryRecord(
             schemaVersion = 1,
             sessionId = session.sessionId,
@@ -134,8 +141,25 @@ class ProbeForegroundService : Service() {
             clientTimestamp = OffsetDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
             appVersion = "0.1.0",
             androidApiLevel = Build.VERSION.SDK_INT,
-            payload = collector.collect()
+            payload = basePayload.copy(
+                manufacturer = Build.MANUFACTURER,
+                model = Build.MODEL,
+                probes = probes
+            )
         )
+    }
+
+    private suspend fun collectActiveProbes(gateway: String?, receiverUrl: String): Map<String, ProbeResult> {
+        val network = wifiNetwork(connectivityManager)
+        val probes = linkedMapOf<String, ProbeResult>()
+        if (!gateway.isNullOrBlank()) {
+            probes["gateway"] = probeRunner.tcpConnect(gateway, DNS_PORT, ACTIVE_PROBE_TIMEOUT_MS, network)
+        } else {
+            probes["gateway"] = ProbeResult(ok = false, detail = "gateway_unavailable")
+        }
+        probes["dns"] = probeRunner.dnsLookup(DEFAULT_DNS_HOSTNAME, network)
+        probes["http"] = probeRunner.httpGet("${receiverUrl.trimEnd('/')}/health", ACTIVE_PROBE_TIMEOUT_MS, network)
+        return probes
     }
 
     private fun createNotificationChannel() {
@@ -165,5 +189,8 @@ class ProbeForegroundService : Service() {
         const val CHANNEL_ID = "probe"
         const val NOTIFICATION_ID = 1001
         const val SAMPLE_INTERVAL_MS = 1_000L
+        const val ACTIVE_PROBE_TIMEOUT_MS = 1_000
+        const val DNS_PORT = 53
+        const val DEFAULT_DNS_HOSTNAME = "example.com"
     }
 }

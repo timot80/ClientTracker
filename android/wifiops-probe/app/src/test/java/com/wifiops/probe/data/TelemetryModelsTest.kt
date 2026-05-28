@@ -1,6 +1,7 @@
 package com.wifiops.probe.data
 
 import kotlinx.serialization.json.Json
+import com.wifiops.probe.telemetry.ProbeResult
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -24,6 +25,9 @@ class TelemetryModelsTest {
                 ipv4Address = "192.0.2.45",
                 ipv6Addresses = listOf("2001:db8::45"),
                 ipAddresses = listOf("192.0.2.45", "2001:db8::45"),
+                manufacturer = "Google",
+                model = "Pixel",
+                probes = mapOf("gateway" to ProbeResult(ok = true, latencyMs = 8)),
                 availability = mapOf("ssid" to "unavailable_or_redacted")
             )
         )
@@ -37,6 +41,9 @@ class TelemetryModelsTest {
         assertEquals(true, json.contains("\"ipv4_address\":\"192.0.2.45\""))
         assertEquals(true, json.contains("\"ipv6_addresses\":[\"2001:db8::45\"]"))
         assertEquals(true, json.contains("\"ip_addresses\":[\"192.0.2.45\",\"2001:db8::45\"]"))
+        assertEquals(true, json.contains("\"manufacturer\":\"Google\""))
+        assertEquals(true, json.contains("\"model\":\"Pixel\""))
+        assertEquals(true, json.contains("\"probes\":{\"gateway\":{\"ok\":true,\"latency_ms\":8"))
         assertEquals(true, json.contains("\"ssid\":\"unavailable_or_redacted\""))
     }
 
