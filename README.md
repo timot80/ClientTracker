@@ -25,6 +25,34 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
+## Easy Install Bundle
+
+Build a macOS install bundle:
+
+```bash
+scripts/build-macos-install-bundle.sh
+```
+
+The builder creates `dist/wifiops-macos-0.1.0.zip` with the WifiOps wheel,
+runtime dependency wheels, installer, launcher scripts, and config template.
+To install from the bundle, unzip it and double-click `install.command`.
+
+If macOS blocks the unsigned script, right-click `install.command`, choose
+Open, and confirm. You can also install from Terminal:
+
+```bash
+cd /path/to/wifiops-macos
+./install.command
+```
+
+The installer creates `~/Applications/WifiOps`, preserves an existing
+`config.yaml`, and exposes common launchers under `~/Applications/WifiOps/bin`.
+After install, run:
+
+```bash
+~/Applications/WifiOps/bin/wifiops-check
+```
+
 ## Configuration
 
 Copy the tracked example file and edit the local copy:
