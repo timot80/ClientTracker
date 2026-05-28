@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
+export WIFIOPS_CONFIG="${WIFIOPS_CONFIG:-$APP_DIR/config.yaml}"
+
+exec "$APP_DIR/.venv/bin/wifiops" ap filesystems --config "$WIFIOPS_CONFIG" "$@"
