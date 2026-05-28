@@ -35,7 +35,7 @@ wifiops probe receive --pair --host 127.0.0.1 --port 8765 --log /tmp/android-pro
 3. Enter the receiver URL, session ID, and token shown by the `wifiops probe receive --pair` command, or paste the pairing JSON if available.
 4. Confirm the phone is on the same network as the advertised receiver address.
 5. Tap `Start`.
-6. Grant the requested Wi-Fi and notification permissions.
+6. Grant the requested Wi-Fi, notification, and precise location permissions. Android gates SSID/BSSID visibility behind location permission; the app does not collect GPS coordinates.
 7. Walk through the test area.
 8. Roam, briefly disable Wi-Fi, or move out of coverage to verify local buffering.
 9. Return to coverage and confirm pending records sync.
@@ -54,4 +54,4 @@ wifiops probe receive --pair --host 127.0.0.1 --port 8765 --log /tmp/android-pro
 - If the phone cannot reach the receiver, verify that `--advertise-host` is the wifiops machine IP address reachable from the phone's Wi-Fi network.
 - For IPv6 literals, enter or paste the bracketed URL exactly, for example `http://[2001:db8::10]:8765`.
 - If records stay pending after reconnecting, restart pairing and confirm the token was copied exactly.
-- If SSID or BSSID fields are unavailable, confirm the requested Android Wi-Fi permissions were granted. The app does not collect GPS coordinates.
+- If SSID or BSSID fields are unavailable, confirm the requested Android Wi-Fi and precise location permissions were granted and that Android Location is enabled. The app does not collect GPS coordinates.

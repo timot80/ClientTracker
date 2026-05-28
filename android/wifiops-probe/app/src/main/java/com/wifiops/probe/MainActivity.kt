@@ -256,7 +256,8 @@ class MainActivity : ComponentActivity() {
         return when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> listOf(
                 Manifest.permission.NEARBY_WIFI_DEVICES,
-                Manifest.permission.POST_NOTIFICATIONS
+                Manifest.permission.POST_NOTIFICATIONS,
+                Manifest.permission.ACCESS_FINE_LOCATION
             )
 
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> listOf(
