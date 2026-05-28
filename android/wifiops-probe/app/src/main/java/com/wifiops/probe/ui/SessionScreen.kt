@@ -15,8 +15,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.wifiops.probe.PreflightCheck
+import com.wifiops.probe.PreflightRecoveryAction
+import com.wifiops.probe.PreflightState
 import com.wifiops.probe.pairing.PairingPayload
 
 data class TelemetryCounters(
@@ -57,7 +60,8 @@ fun SessionScreen(
     onStart: () -> Unit,
     onStop: () -> Unit,
     onPairDifferentReceiver: () -> Unit,
-    onShowHistory: () -> Unit
+    onShowHistory: () -> Unit,
+    onPreflightAction: (PreflightRecoveryAction) -> Unit
 ) {
     Column(
         modifier = modifier
@@ -89,10 +93,7 @@ fun SessionScreen(
                 style = MaterialTheme.typography.titleMedium
             )
             state.preflightChecks.forEach { check ->
-                StatusLine(
-                    label = check.title,
-                    value = "${check.state.label}: ${check.detail}"
-                )
+                PreflightRow(check = check, onPreflightAction = onPreflightAction)
             }
         }
 
@@ -142,6 +143,37 @@ fun SessionScreen(
         ) {
             Text("Session history")
         }
+    }
+}
+
+@Composable
+private fun PreflightRow(
+    check: PreflightCheck,
+    onPreflightAction: (PreflightRecoveryAction) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(text = check.title, style = MaterialTheme.typography.labelLarge)
+        Text(
+            text = check.state.label,
+            color = preflightStateColor(check.state),
+            style = MaterialTheme.typography.bodyLarge
+        )
+        Text(text = check.detail, style = MaterialTheme.typography.bodyMedium)
+        check.recoveryAction?.let { action ->
+            OutlinedButton(onClick = { onPreflightAction(action) }) {
+                Text(action.label)
+            }
+        }
+    }
+}
+
+@Composable
+private fun preflightStateColor(state: PreflightState): Color {
+    return when (state) {
+        PreflightState.Ready -> MaterialTheme.colorScheme.tertiary
+        PreflightState.NeedsAction,
+        PreflightState.LimitedData -> MaterialTheme.colorScheme.secondary
+        PreflightState.Blocked -> MaterialTheme.colorScheme.error
     }
 }
 

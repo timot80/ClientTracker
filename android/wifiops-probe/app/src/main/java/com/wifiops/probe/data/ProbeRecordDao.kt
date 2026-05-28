@@ -79,6 +79,26 @@ interface ProbeRecordDao {
     @Query(
         """
         SELECT *
+        FROM records
+        WHERE sessionId = :sessionId
+        ORDER BY sequenceNumber
+        """
+    )
+    suspend fun recordsForSession(sessionId: String): List<RecordEntity>
+
+    @Query(
+        """
+        SELECT *
+        FROM sessions
+        WHERE sessionId = :sessionId
+        LIMIT 1
+        """
+    )
+    suspend fun session(sessionId: String): SessionEntity?
+
+    @Query(
+        """
+        SELECT *
         FROM sessions
         ORDER BY createdAtMillis DESC
         """

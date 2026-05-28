@@ -8,8 +8,11 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,7 +20,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.room.Room
 import com.wifiops.probe.data.ProbeDatabase
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import com.wifiops.probe.pairing.PairingPayload
 import com.wifiops.probe.data.RecordEntity
 import com.wifiops.probe.data.TelemetryRecord
+import com.wifiops.probe.data.buildRawRecordExportJson
 import com.wifiops.probe.service.ProbeForegroundService
 import com.wifiops.probe.sync.ProbeSyncClient
 import com.wifiops.probe.ui.LatestTelemetrySummary
@@ -36,6 +39,7 @@ import com.wifiops.probe.ui.SessionHistoryScreen
 import com.wifiops.probe.ui.SessionScreen
 import com.wifiops.probe.ui.SessionSummary
 import com.wifiops.probe.ui.SessionUiState
+import com.wifiops.probe.ui.theme.WifiOpsTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -95,7 +99,7 @@ class MainActivity : ComponentActivity() {
         refreshSessionHistory()
         refreshPreflightChecks()
         setContent {
-            MaterialTheme {
+            WifiOpsTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val paired = pairingPayload
                     when {
@@ -119,7 +123,8 @@ class MainActivity : ComponentActivity() {
                             sessions = sessionHistory,
                             activeSessionId = paired.sessionId.takeIf { probeRunning },
                             onBack = { showingHistory = false },
-                            onExport = { exportSessionSummary(it) },
+                            onExportSummary = { exportSessionSummary(it) },
+                            onExportRecords = { exportSessionRecords(it) },
                             onDelete = { deleteSession(it) }
                         )
 
@@ -144,7 +149,8 @@ class MainActivity : ComponentActivity() {
                             onShowHistory = {
                                 refreshSessionHistory()
                                 showingHistory = true
-                            }
+                            },
+                            onPreflightAction = { handlePreflightAction(it) }
                         )
                     }
                 }
@@ -288,6 +294,30 @@ class MainActivity : ComponentActivity() {
 
     private fun refreshPreflightChecks() {
         preflightChecks = computePreflightChecks()
+    }
+
+    private fun handlePreflightAction(action: PreflightRecoveryAction) {
+        when (action) {
+            PreflightRecoveryAction.Retry -> {
+                permissionMessage = null
+                refreshPreflightChecks()
+            }
+
+            PreflightRecoveryAction.OpenSettings -> openAppSettings()
+            PreflightRecoveryAction.TestAgain -> {
+                permissionMessage = null
+                receiverReachable = null
+                pairingPayload?.receiverUrl?.let { refreshReceiverReachability(it) }
+                refreshPreflightChecks()
+            }
+        }
+    }
+
+    private fun openAppSettings() {
+        startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(Uri.fromParts("package", packageName, null))
+        )
     }
 
     private fun computePreflightChecks(): List<PreflightCheck> {
@@ -495,6 +525,44 @@ class MainActivity : ComponentActivity() {
                     .putExtra(Intent.EXTRA_SUBJECT, "Wi-Fi Ops Probe ${session.sessionId}")
                     .putExtra(Intent.EXTRA_TEXT, text),
                 "Export summary"
+            )
+        )
+    }
+
+    private fun exportSessionRecords(sessionId: String) {
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val dao = database.probeRecordDao()
+                    val session = dao.session(sessionId) ?: error("Session $sessionId was not found")
+                    val records = dao.recordsForSession(sessionId)
+                    buildRawRecordExportJson(
+                        session = session,
+                        records = records,
+                        exportedAtMillis = System.currentTimeMillis()
+                    )
+                }
+            }
+            result.onSuccess { json ->
+                shareRawRecordExport(sessionId, json)
+            }.onFailure { error ->
+                Toast.makeText(
+                    this@MainActivity,
+                    error.message ?: "Unable to export records",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun shareRawRecordExport(sessionId: String, json: String) {
+        startActivity(
+            Intent.createChooser(
+                Intent(Intent.ACTION_SEND)
+                    .setType("application/json")
+                    .putExtra(Intent.EXTRA_SUBJECT, "Wi-Fi Ops Probe records $sessionId")
+                    .putExtra(Intent.EXTRA_TEXT, json),
+                "Export records"
             )
         )
     }

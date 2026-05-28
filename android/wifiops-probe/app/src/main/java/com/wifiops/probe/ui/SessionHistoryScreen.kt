@@ -2,7 +2,6 @@ package com.wifiops.probe.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -34,7 +33,8 @@ fun SessionHistoryScreen(
     activeSessionId: String? = null,
     modifier: Modifier = Modifier,
     onBack: () -> Unit,
-    onExport: (String) -> Unit,
+    onExportSummary: (String) -> Unit,
+    onExportRecords: (String) -> Unit,
     onDelete: (String) -> Unit
 ) {
     Column(
@@ -56,14 +56,15 @@ fun SessionHistoryScreen(
             )
         } else {
             Text(
-                text = "Export summary shares counters only. Raw record export may contain network identifiers and device/session metadata.",
+                text = "Export records shares raw JSON and may include network identifiers, IP information, timestamps, device model, and receiver destination.",
                 style = MaterialTheme.typography.bodySmall
             )
             sessions.forEach { session ->
                 SessionSummaryRow(
                     session = session,
                     isActive = session.sessionId == activeSessionId,
-                    onExport = onExport,
+                    onExportSummary = onExportSummary,
+                    onExportRecords = onExportRecords,
                     onDelete = onDelete
                 )
             }
@@ -82,7 +83,8 @@ fun SessionHistoryScreen(
 private fun SessionSummaryRow(
     session: SessionSummary,
     isActive: Boolean,
-    onExport: (String) -> Unit,
+    onExportSummary: (String) -> Unit,
+    onExportRecords: (String) -> Unit,
     onDelete: (String) -> Unit
 ) {
     var confirmingDelete by remember(session.sessionId) { mutableStateOf(false) }
@@ -94,11 +96,23 @@ private fun SessionSummaryRow(
             text = "Collected ${session.counters.collected}  Pending ${session.counters.pending}  Synced ${session.counters.synced}  Failed ${session.counters.failed}",
             style = MaterialTheme.typography.bodySmall
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { onExport(session.sessionId) }) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = { onExportSummary(session.sessionId) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Text("Export summary")
             }
-            OutlinedButton(onClick = { confirmingDelete = true }) {
+            OutlinedButton(
+                onClick = { onExportRecords(session.sessionId) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Export records")
+            }
+            OutlinedButton(
+                onClick = { confirmingDelete = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Text("Delete session")
             }
         }

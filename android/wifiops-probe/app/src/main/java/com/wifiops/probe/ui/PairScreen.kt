@@ -51,9 +51,16 @@ fun PairScreen(
             style = MaterialTheme.typography.headlineSmall
         )
         Text(
-            text = "Enter the receiver values shown by the wifiops receiver setup command.",
+            text = "Scan the receiver QR code when scanner support lands, or paste the setup JSON shown by the receiver.",
             style = MaterialTheme.typography.bodyMedium
         )
+        Button(
+            onClick = {},
+            enabled = false,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Scan receiver QR code (coming next)")
+        }
 
         savedPairing?.let { saved ->
             Text(
@@ -77,6 +84,42 @@ fun PairScreen(
             )
         }
 
+        Text(
+            text = "Paste setup JSON",
+            style = MaterialTheme.typography.titleMedium
+        )
+        OutlinedTextField(
+            value = payloadJson,
+            onValueChange = { payloadJson = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(112.dp),
+            label = { Text("Receiver setup JSON") }
+        )
+        Button(
+            onClick = {
+                runCatching {
+                    PairingPayload.parse(payloadJson)
+                }.onSuccess {
+                    error = null
+                    receiverUrl = it.receiverUrl
+                    sessionId = it.sessionId
+                    token = it.token
+                    onPaired(it)
+                }.onFailure {
+                    error = it.message ?: "Receiver setup JSON is invalid"
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Paste setup JSON")
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "Enter receiver details",
+            style = MaterialTheme.typography.titleMedium
+        )
         OutlinedTextField(
             value = receiverUrl,
             onValueChange = { receiverUrl = it },
@@ -114,43 +157,7 @@ fun PairScreen(
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Set up new receiver")
-        }
-
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "Or paste receiver setup JSON",
-            style = MaterialTheme.typography.titleMedium
-        )
-        OutlinedTextField(
-            value = payloadJson,
-            onValueChange = { payloadJson = it },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(112.dp),
-            label = { Text("Receiver setup JSON") }
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            OutlinedButton(
-                onClick = {
-                    runCatching {
-                        PairingPayload.parse(payloadJson)
-                    }.onSuccess {
-                        error = null
-                        receiverUrl = it.receiverUrl
-                        sessionId = it.sessionId
-                        token = it.token
-                        onPaired(it)
-                    }.onFailure {
-                        error = it.message ?: "Receiver setup JSON is invalid"
-                    }
-                }
-            ) {
-                Text("Use JSON")
-            }
+            Text("Enter receiver details")
         }
 
         error?.let {
