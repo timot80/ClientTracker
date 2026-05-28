@@ -19,6 +19,9 @@ class WifiTelemetryCollectorTest {
 
     @Test
     fun channelFromFrequencyHandlesSixGhz() {
+        assertEquals("2", channelFromFrequency(5935))
+        assertEquals("1", channelFromFrequency(5955))
+        assertEquals("3", channelFromFrequency(5965))
         assertEquals("5", channelFromFrequency(5975))
     }
 
@@ -26,5 +29,7 @@ class WifiTelemetryCollectorTest {
     fun channelFromFrequencyReturnsNullForUnknownFrequency() {
         assertNull(channelFromFrequency(null))
         assertNull(channelFromFrequency(1234))
+        assertNull(channelFromFrequency(5925))
+        assertNull(channelFromFrequency(5950))
     }
 }

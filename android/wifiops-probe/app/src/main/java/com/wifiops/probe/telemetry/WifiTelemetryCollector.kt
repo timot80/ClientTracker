@@ -11,7 +11,8 @@ fun channelFromFrequency(frequencyMhz: Int?): String? {
         in 2412..2472 -> (((frequencyMhz - 2412) / 5) + 1).toString()
         2484 -> "14"
         in 5000..5895 -> ((frequencyMhz - 5000) / 5).toString()
-        in 5925..7125 -> ((frequencyMhz - 5950) / 5).toString()
+        5935 -> "2"
+        in 5955..7115 -> ((frequencyMhz - 5950) / 5).toString()
         else -> null
     }
 }
