@@ -7,7 +7,7 @@ import androidx.room.Query
 
 @Dao
 interface ProbeRecordDao {
-    @Insert(onConflict = OnConflictStrategy.ABORT)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSession(session: SessionEntity)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
@@ -55,4 +55,38 @@ interface ProbeRecordDao {
         """
     )
     suspend fun countByStatus(sessionId: String, status: String): Int
+
+    @Query(
+        """
+        SELECT COALESCE(MAX(sequenceNumber), 0)
+        FROM records
+        WHERE sessionId = :sessionId
+        """
+    )
+    suspend fun maxSequenceForSession(sessionId: String): Long
+
+    @Query(
+        """
+        SELECT *
+        FROM sessions
+        ORDER BY createdAtMillis DESC
+        """
+    )
+    suspend fun sessions(): List<SessionEntity>
+
+    @Query(
+        """
+        DELETE FROM records
+        WHERE sessionId = :sessionId
+        """
+    )
+    suspend fun deleteRecordsForSession(sessionId: String)
+
+    @Query(
+        """
+        DELETE FROM sessions
+        WHERE sessionId = :sessionId
+        """
+    )
+    suspend fun deleteSession(sessionId: String)
 }

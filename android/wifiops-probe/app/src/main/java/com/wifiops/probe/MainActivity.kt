@@ -5,10 +5,13 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import androidx.room.Room
+import com.wifiops.probe.data.ProbeDatabase
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
@@ -18,17 +21,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.fillMaxSize
 import com.wifiops.probe.pairing.PairingPayload
 import com.wifiops.probe.service.ProbeForegroundService
+import com.wifiops.probe.ui.TelemetryCounters
 import com.wifiops.probe.ui.PairScreen
 import com.wifiops.probe.ui.SessionHistoryScreen
 import com.wifiops.probe.ui.SessionScreen
 import com.wifiops.probe.ui.SessionSummary
 import com.wifiops.probe.ui.SessionUiState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
+    private lateinit var database: ProbeDatabase
     private var pairingPayload by mutableStateOf<PairingPayload?>(null)
     private var probeRunning by mutableStateOf(false)
     private var showingHistory by mutableStateOf(false)
     private var permissionMessage by mutableStateOf<String?>(null)
+    private var sessionHistory by mutableStateOf<List<SessionSummary>>(emptyList())
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -42,6 +51,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        database = Room.databaseBuilder(
+            applicationContext,
+            ProbeDatabase::class.java,
+            "wifiops-probe.db"
+        ).build()
+        refreshSessionHistory()
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -56,22 +71,10 @@ class MainActivity : ComponentActivity() {
                         )
 
                         showingHistory -> SessionHistoryScreen(
-                            sessions = listOf(
-                                SessionSummary(
-                                    sessionId = paired.sessionId,
-                                    receiverUrl = paired.receiverUrl
-                                )
-                            ),
+                            sessions = sessionHistory,
                             onBack = { showingHistory = false },
-                            onExport = {
-                                permissionMessage = "Session export is not available in this build."
-                                showingHistory = false
-                            },
-                            onDelete = {
-                                stopProbeService()
-                                pairingPayload = null
-                                showingHistory = false
-                            }
+                            onExport = { exportSessionSummary(it) },
+                            onDelete = { deleteSession(it) }
                         )
 
                         else -> SessionScreen(
@@ -87,7 +90,10 @@ class MainActivity : ComponentActivity() {
                                 pairingPayload = null
                                 showingHistory = false
                             },
-                            onShowHistory = { showingHistory = true }
+                            onShowHistory = {
+                                refreshSessionHistory()
+                                showingHistory = true
+                            }
                         )
                     }
                 }
@@ -122,11 +128,75 @@ class MainActivity : ComponentActivity() {
                 .putExtra(ProbeForegroundService.EXTRA_TOKEN, paired.token)
         )
         probeRunning = true
+        refreshSessionHistory()
     }
 
     private fun stopProbeService() {
         stopService(Intent(this, ProbeForegroundService::class.java))
         probeRunning = false
+    }
+
+    private fun refreshSessionHistory() {
+        if (!::database.isInitialized) {
+            return
+        }
+        lifecycleScope.launch {
+            sessionHistory = withContext(Dispatchers.IO) {
+                val dao = database.probeRecordDao()
+                dao.sessions().map { session ->
+                    val pending = dao.countByStatus(session.sessionId, "pending")
+                    val synced = dao.countByStatus(session.sessionId, "synced")
+                    val failed = dao.countByStatus(session.sessionId, "failed")
+                    SessionSummary(
+                        sessionId = session.sessionId,
+                        receiverUrl = session.receiverUrl,
+                        counters = TelemetryCounters(
+                            collected = pending + synced + failed,
+                            pending = pending,
+                            synced = synced,
+                            failed = failed
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    private fun deleteSession(sessionId: String) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                val dao = database.probeRecordDao()
+                dao.deleteRecordsForSession(sessionId)
+                dao.deleteSession(sessionId)
+            }
+            if (pairingPayload?.sessionId == sessionId) {
+                stopProbeService()
+                pairingPayload = null
+                showingHistory = false
+            }
+            refreshSessionHistory()
+        }
+    }
+
+    private fun exportSessionSummary(sessionId: String) {
+        val session = sessionHistory.firstOrNull { it.sessionId == sessionId } ?: return
+        val text = buildString {
+            appendLine("wifiops Android probe session")
+            appendLine("Session: ${session.sessionId}")
+            appendLine("Receiver: ${session.receiverUrl}")
+            appendLine("Pending: ${session.counters.pending}")
+            appendLine("Synced: ${session.counters.synced}")
+            appendLine("Failed: ${session.counters.failed}")
+        }
+        startActivity(
+            Intent.createChooser(
+                Intent(Intent.ACTION_SEND)
+                    .setType("text/plain")
+                    .putExtra(Intent.EXTRA_SUBJECT, "wifiops probe ${session.sessionId}")
+                    .putExtra(Intent.EXTRA_TEXT, text),
+                "Export session"
+            )
+        )
     }
 
     private fun requiredRuntimePermissions(): List<String> {
