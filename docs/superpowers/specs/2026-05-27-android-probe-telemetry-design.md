@@ -92,39 +92,61 @@ Runtime behavior:
 
 Android may require location-related permissions to expose SSID, BSSID, and Wi-Fi connection details. The app may request the permissions required to read Wi-Fi identity and RF data, but it must not collect GPS coordinates in the first version.
 
+Permission and service requirements:
+
+- Target current Android SDK. Minimum SDK remains Android 10 / API 29.
+- Declare `android.permission.ACCESS_NETWORK_STATE`, `android.permission.ACCESS_WIFI_STATE`, `android.permission.INTERNET`, `android.permission.POST_NOTIFICATIONS` for Android 13+, and foreground-service permissions required by the selected foreground service type.
+- Declare `android.permission.NEARBY_WIFI_DEVICES` for Android 13+ with `android:usesPermissionFlags="neverForLocation"` because the app does not derive physical location from Wi-Fi data.
+- Keep `android.permission.ACCESS_FINE_LOCATION` with `android:maxSdkVersion="32"` for Android 10-12L Wi-Fi identity access. Do not request GPS coordinates.
+- Avoid active Wi-Fi scans in the MVP. If a later version uses `WifiManager.getScanResults()` or `startScan()`, revisit `ACCESS_FINE_LOCATION` behavior because some scan APIs still require it even for apps targeting Android 13+.
+- For Android 14+, declare the foreground service type and matching foreground-service permission. Use `dataSync` for the upload/sync service. Do not use the `location` foreground-service type in the first version.
+- The app must show degraded states when required permissions are denied, Nearby Devices is disabled, Location Services prevents SSID/BSSID access on older versions, notification permission is denied, or foreground-service startup fails.
+- Local HTTP receiver mode requires an Android network security configuration that permits cleartext only for explicitly paired local IP addresses or debug/local builds. Hosted collector mode must be HTTPS-only.
+
 The app should make this explicit in its UI and data model:
 
 - collect SSID, BSSID, RSSI, link speed, frequency/channel, network ID where available, IP/gateway/DNS state, and Android device/app metadata needed for troubleshooting
 - do not collect latitude, longitude, altitude, or raw location tracks
-- let the operator choose whether to include a human-readable device label
+- let the operator choose whether to include a human-readable device label, defaulting to no label
+- use a per-install random device ID that can be reset by clearing app data; use per-session IDs in exports and uploads rather than hardware identifiers
+- provide session delete controls and make exports explicit because SSID, BSSID, IP addresses, DNS servers, and device model can still be sensitive
 
 ## Telemetry Scope
 
-Each periodic sample should include the fields Android can reliably provide:
+Each periodic sample should include a stable envelope and a nullable payload. Android API level, permission state, OEM behavior, Wi-Fi generation, 6 GHz/7 support, and MLO behavior can make individual fields unavailable or redacted.
 
-- session ID
-- device ID
-- record ID
-- sequence number
-- client timestamp
-- app version
-- Android version/API level
-- device manufacturer/model
-- Wi-Fi connection state
-- SSID
-- BSSID
-- RSSI
-- link speed
-- receive link speed when available
-- transmit link speed when available
-- frequency
-- derived channel when possible
-- Wi-Fi standard when available
-- security/key management when available
-- IPv4 address
-- gateway
-- DNS servers
-- active probe results
+Required envelope fields:
+
+- `schema_version`
+- `session_id`
+- `device_id`
+- `record_id`
+- `sequence_number`
+- `record_type`
+- `client_timestamp`
+- `app_version`
+- `android_api_level`
+
+Payload fields are best-effort and nullable:
+
+| Field | Source | Required access | Fallback |
+| --- | --- | --- | --- |
+| `connection_state` | Connectivity/Wi-Fi APIs | network state | report disconnected or unknown |
+| `ssid` | Wi-Fi connection info | Wi-Fi identity permission and platform settings | null with availability reason |
+| `bssid` | Wi-Fi connection info | Wi-Fi identity permission and platform settings | null with availability reason |
+| `rssi` | Wi-Fi connection info | Wi-Fi state | null if unavailable |
+| `link_mbps` | Wi-Fi connection info | Wi-Fi state | null if unavailable |
+| `tx_link_mbps` | API-dependent Wi-Fi connection info | Wi-Fi state | null if unsupported |
+| `rx_link_mbps` | API-dependent Wi-Fi connection info | Wi-Fi state | null if unsupported |
+| `frequency_mhz` | Wi-Fi connection info | Wi-Fi state | null if unavailable |
+| `channel` | derived from frequency | frequency present | null if frequency unavailable |
+| `wifi_standard` | API-dependent Wi-Fi connection info | Wi-Fi state | null if unsupported |
+| `security` | connection/capability APIs | API and permission dependent | null in MVP unless reliably available |
+| `ipv4_address` | link properties | network state | null if unavailable |
+| `gateway` | link properties/routes | network state | null if unavailable |
+| `dns` | link properties | network state | empty list if unavailable |
+| `manufacturer`/`model` | Android build metadata | none | optional; may be omitted by privacy setting |
+| `availability` | app-generated metadata | none | include per-field unavailable reasons |
 
 Active probe results:
 
@@ -191,6 +213,18 @@ Events use the same envelope with `record_type: "event"` and an event payload. T
 
 Local MVP transport can use HTTP on the local network because it is scoped to lab/walk-test use and authenticated by the token. The data contract should not depend on HTTP. The hosted collector path should require HTTPS and either longer-lived device credentials or a device enrollment flow.
 
+Token rules:
+
+- Generate at least 128 bits of entropy using a cryptographically secure random source.
+- Put the token in `Authorization: Bearer <token>` only. Do not put tokens in URL query strings.
+- QR payload may contain the token because it is the pairing handoff, but terminal logs and CSV files must redact it.
+- Token expires if unused within the pairing window and is invalidated when the receiver stops.
+- On first successful upload, bind the session to the first `device_id` unless `--allow-multiple-devices` is explicitly added in a future version.
+- Reject uploads for mismatched `device_id`, invalid session ID, missing token, expired token, or malformed authorization header.
+- Keep dedupe and accepted-record state for the lifetime of the receiver session in the MVP.
+- Apply a max request body size, max records per batch, and simple per-session rate limit so a bad client cannot exhaust memory.
+- Print a clear warning when binding to `0.0.0.0` or any non-loopback address because the receiver is exposed to the LAN.
+
 Pairing details:
 
 - token expires if not used within a short window
@@ -235,11 +269,61 @@ Receiver endpoints:
 - `POST /api/v1/sessions/{session_id}/records`: ingest one or more telemetry records
 - `GET /api/v1/sessions/{session_id}/latest`: latest normalized state for display/integration
 
+Receiver preflight behavior:
+
+- Default bind address is loopback for safety. The operator must opt into LAN exposure with `--host 0.0.0.0` or a specific interface address.
+- When pairing, print the exact advertised URL encoded into the QR code and show the selected bind host/port.
+- Add `--advertise-host` so the operator can choose the reachable host/IP when the machine has multiple interfaces or VPN routes.
+- The Android app calls `/health` before enabling Start Test and shows actionable errors for timeout, refused connection, token rejected, or wrong network.
+- Document that guest WLAN client isolation, host firewalls, VPN routing, NAT, and wrong interface selection can prevent phone-to-receiver connectivity.
+
+Ingest API semantics:
+
+- Request body is JSON with a top-level `records` array.
+- Maximum body size is 1 MiB in the MVP.
+- Maximum records per batch is 100.
+- The receiver processes records independently and returns per-record status.
+- Duplicate `record_id` returns status `duplicate` and does not mutate latest state or write another CSV row.
+- Invalid records return status `rejected` with a machine-readable error code.
+- Valid new records return status `accepted`.
+- A batch with mixed valid and invalid records returns HTTP 207 Multi-Status or HTTP 200 with per-record statuses; the MVP should use HTTP 200 to keep the Android client simple.
+- Receiver timestamps accepted records, but preserves Android `client_timestamp` for ordering and analysis.
+- The receiver does not promise strict ordering across batches. Android uploads in sequence order, and CSV rows include sequence number so post-processing can sort.
+- Dedupe state is in-memory for the receiver session in the first version.
+
+Example acknowledgement:
+
+```json
+{
+  "accepted": ["01JABC"],
+  "duplicate": ["01JABD"],
+  "rejected": [
+    {"record_id": "01JABE", "error": "missing_payload"}
+  ]
+}
+```
+
 The receiver should run until interrupted, render the latest Android local client state and event timeline, and write CSV rows when `--log` is supplied.
 
 The first implementation should use Python standard library HTTP support, such as `ThreadingHTTPServer`, to avoid adding a web framework dependency for a narrow local receiver. Keep the receiver isolated under a new package/module so it does not entangle WLC/AP polling code.
 
 ## Integration With Existing Models
+
+Keep Android-specific ingest records separate from the existing `client_tracker` models. Add a receiver-side adapter that projects Android records into the current display and CSV concepts:
+
+- `AndroidTelemetryRecord`: raw validated ingest envelope and payload.
+- `AndroidReceiverState`: session/device/token/dedupe/latest-state holder.
+- `AndroidLocalAdapter`: maps the latest sample into `LocalClientState`.
+- `AndroidEventAdapter`: maps only supported event names into `TrackerEvent`; unsupported Android-specific events remain in receiver records and optional Android CSV columns.
+
+Do not extend global `EventType` until a concrete UI needs those event names outside probe receiver mode. For MVP timeline display:
+
+- `bssid-change` maps to existing `bssid-change`
+- `disassociated` maps to existing `disassociated`
+- `associated` maps to existing `associated`
+- `probe-failed`, `probe-recovered`, `upload-failed`, `upload-recovered`, `session-started`, and `session-stopped` map to existing `poll-error`, `poll-recovered`, `startup`, or `shutdown` where that preserves meaning; otherwise render them as receiver-local text events without changing the shared model
+
+Add Android CSV support as a receiver-owned CSV writer or extend the existing CSV writer only after preserving backward compatibility. Android CSV rows should include `session_id`, `device_id`, `record_id`, `sequence_number`, `client_timestamp`, probe summaries, sync/upload event text, and normalized local fields.
 
 Map Android sample payloads into `LocalClientState`:
 
@@ -312,6 +396,19 @@ Manual field tests:
 - disassociation/reassociation generates events
 - CSV contains samples and events in expected order
 
+## Implementation Slices
+
+Implement in independently testable slices:
+
+1. Python receiver contract and validation: envelope models, token validation, dedupe, batch acknowledgement, and unit tests.
+2. Python CLI and display integration: `wifiops probe receive`, QR output, receiver loop, latest-state projection, timeline, and CSV logging.
+3. Android project scaffold: Gradle project under `android/wifiops-probe`, Kotlin app, manifest, permissions, network security config, and debug APK build.
+4. Android data contract and local store: Kotlin envelope models, Room session/record tables, JSON serialization, export.
+5. Android foreground collection service: permission gates, notification, 1-second sampling loop, nullable Wi-Fi field collection, active probes.
+6. Android sync engine: health preflight, bearer authorization, ordered batch upload, retry/backoff, per-record acknowledgement handling.
+7. Android UI: pairing, session dashboard, sync counts, degraded permission/connectivity states, session history/delete/export.
+8. Field-test validation: pair phone to local receiver, roam/disconnect test, offline buffering test, CSV inspection, and documented troubleshooting notes.
+
 ## Implementation Defaults
 
 - Minimum Android SDK: Android 10 / API 29.
@@ -320,3 +417,9 @@ Manual field tests:
 - Android local store: Room over SQLite.
 - Receiver HTTP stack: Python standard library `ThreadingHTTPServer`.
 - Default sample interval: 1 second during an active walk-test session.
+
+## References
+
+- Android Wi-Fi permissions: https://developer.android.com/develop/connectivity/wifi/wifi-permissions
+- Android 14 foreground service types: https://developer.android.com/about/versions/14/changes/fgs-types-required
+- Android network security configuration: https://developer.android.com/privacy-and-security/security-config
