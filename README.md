@@ -53,6 +53,30 @@ After install, run:
 ~/Applications/WifiOps/bin/wifiops-check
 ```
 
+Build a Windows install bundle:
+
+```powershell
+scripts/build-windows-install-bundle.ps1
+```
+
+The builder creates `dist\wifiops-windows-0.1.0.zip` with the WifiOps wheel,
+runtime dependency wheels, PowerShell installer, `.cmd` launchers, and config
+template. To install from the bundle, unzip it, open PowerShell in the extracted
+`wifiops-windows` folder, and run:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\install.ps1
+```
+
+The installer creates `%LOCALAPPDATA%\WifiOps`, preserves an existing
+`config.yaml`, and exposes common launchers under `%LOCALAPPDATA%\WifiOps\bin`.
+After install, run:
+
+```cmd
+%LOCALAPPDATA%\WifiOps\bin\wifiops-check.cmd
+```
+
 ## Configuration
 
 Copy the tracked example file and edit the local copy:
