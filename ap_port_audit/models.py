@@ -27,6 +27,12 @@ class APPortConfig:
 
 
 @dataclass(frozen=True)
+class APPortFailure:
+    wlc_name: str
+    message: str
+
+
+@dataclass(frozen=True)
 class APPortRow:
     ap_name: str
     interface: str
@@ -38,6 +44,7 @@ class APPortRow:
     tx_packets: int | None = None
     discarded_packets: int | None = None
     notes: tuple[str, ...] = ()
+    wlc_name: str = ""
 
 
 @dataclass(frozen=True)
@@ -45,6 +52,7 @@ class APPortSnapshot:
     rows: list[APPortRow] = field(default_factory=list)
     timestamp: datetime = field(default_factory=datetime.now)
     parser_warnings: list[str] = field(default_factory=list)
+    failures: list[APPortFailure] = field(default_factory=list)
     poll_error: str = ""
     error_excerpt: str = ""
     raw_command: str = "show ap ethernet statistics"

@@ -1,7 +1,9 @@
 from rich.console import Console
 
 from ap_port_audit.display import build_port_table
-from ap_port_audit.models import APPortAuditConfig, APPortRow, APPortSnapshot
+from dataclasses import replace
+
+from ap_port_audit.models import APPortAuditConfig, APPortFailure, APPortRow, APPortSnapshot
 
 
 def row(ap_name, speed_mbps=100, duplex="Full"):
@@ -47,3 +49,19 @@ def test_build_port_table_includes_parser_warnings():
     rendered = console.export_text()
 
     assert "line 3: skipped malformed row" in rendered
+
+
+def test_build_port_table_renders_wlc_column_and_failures():
+    console = Console(record=True, width=180)
+    snapshot = APPortSnapshot(
+        rows=[replace(row("BAD-AP"), wlc_name="mby-1")],
+        failures=[APPortFailure(wlc_name="mby-2", message="poll failed: timeout")],
+    )
+
+    console.print(build_port_table(snapshot, APPortAuditConfig()))
+    rendered = console.export_text()
+
+    assert "WLC" in rendered
+    assert "mby-1" in rendered
+    assert "mby-2" in rendered
+    assert "poll failed: timeout" in rendered

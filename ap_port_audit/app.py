@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from rich.console import Console
 from rich.panel import Panel
 
 from ap_port_audit.display import build_port_table
-from ap_port_audit.models import APPortAuditConfig, APPortSnapshot
+from ap_port_audit.models import APPortAuditConfig, APPortFailure, APPortSnapshot
 from ap_port_audit.parser import parse_ethernet_statistics
 from ap_port_audit.wlc import APPortAuditSession
 from ap_radio_monitor.models import WLCConfig
+from wifiops.concurrency import run_bounded
 from wifiops.wlc_targets import WlcTarget
 
 
@@ -48,8 +51,40 @@ def run_multi(
     concurrency: int,
     console: Console,
 ) -> int:
-    del concurrency
-    return run_once(targets[0].config, audit_config, console)
+    console.print(f"[cyan]Collecting AP Ethernet statistics from {len(targets)} WLC(s)[/cyan]")
+    results = run_bounded(targets, lambda target: _collect_target(target, audit_config), concurrency)
+    rows = []
+    warnings = []
+    failures = []
+    for result in results:
+        if isinstance(result, APPortFailure):
+            failures.append(result)
+            continue
+        if isinstance(result, Exception):
+            failures.append(APPortFailure(wlc_name="unknown", message=f"poll failed: {result}"))
+            continue
+        rows.extend(result.rows)
+        warnings.extend(result.parser_warnings)
+        failures.extend(result.failures)
+    snapshot = APPortSnapshot(rows=rows, parser_warnings=warnings, failures=failures)
+    console.print("[cyan]Rendering AP Ethernet audit[/cyan]")
+    console.print(build_port_table(snapshot, audit_config))
+    return 1 if failures else 0
+
+
+def _collect_target(target: WlcTarget, audit_config: APPortAuditConfig) -> APPortSnapshot | APPortFailure:
+    session = APPortAuditSession(target.config)
+    try:
+        session.connect()
+        snapshot = _collect_with_error_handling(session, audit_config)
+        if snapshot.poll_error and not snapshot.rows:
+            return APPortFailure(wlc_name=target.name, message=_failure_message(snapshot))
+        return APPortSnapshot(
+            rows=[replace(row, wlc_name=target.name) for row in snapshot.rows],
+            parser_warnings=[f"{target.name}: {warning}" for warning in snapshot.parser_warnings],
+        )
+    finally:
+        session.disconnect()
 
 
 def _collect_with_error_handling(
@@ -68,10 +103,14 @@ def _collect_with_error_handling(
 
 
 def _error_panel(snapshot: APPortSnapshot) -> Panel:
+    return Panel(_failure_message(snapshot), title="AP Ethernet Port Audit", border_style="red")
+
+
+def _failure_message(snapshot: APPortSnapshot) -> str:
     message = snapshot.poll_error
     if snapshot.error_excerpt:
         message = f"{message}\n{snapshot.error_excerpt}"
-    return Panel(message, title="AP Ethernet Port Audit", border_style="red")
+    return message
 
 
 def _output_excerpt(output: str, limit: int = 160) -> str:

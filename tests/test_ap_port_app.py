@@ -3,6 +3,7 @@ from rich.console import Console
 from ap_port_audit.app import collect_once, run_once
 from ap_port_audit.models import APPortAuditConfig
 from ap_radio_monitor.models import WLCConfig
+from wifiops.wlc_targets import WlcTarget
 
 
 SAMPLE_OUTPUT = """
@@ -60,3 +61,38 @@ def test_run_once_returns_nonzero_for_unparseable_output(monkeypatch):
     rendered = console.export_text()
     assert exit_code == 1
     assert "no AP Ethernet port rows parsed" in rendered
+
+
+def test_run_multi_aggregates_rows_and_returns_nonzero_for_partial_failure(monkeypatch):
+    from ap_port_audit.app import run_multi
+
+    class MultiSession:
+        def __init__(self, config):
+            self.config = config
+
+        def connect(self):
+            pass
+
+        def get_ethernet_statistics(self):
+            if self.config.host == "192.0.2.11":
+                raise RuntimeError("connection lost")
+            return SAMPLE_OUTPUT
+
+        def disconnect(self):
+            pass
+
+    targets = [
+        WlcTarget("mby-1", WLCConfig(host="192.0.2.10", username="u", password="p")),
+        WlcTarget("mby-2", WLCConfig(host="192.0.2.11", username="u", password="p")),
+    ]
+    console = Console(record=True, width=160)
+    monkeypatch.setattr("ap_port_audit.app.APPortAuditSession", MultiSession)
+
+    exit_code = run_multi(targets, APPortAuditConfig(), 2, console)
+
+    rendered = console.export_text()
+    assert exit_code == 1
+    assert "mby-1" in rendered
+    assert "BAD-AP" in rendered
+    assert "mby-2" in rendered
+    assert "connection lost" in rendered
