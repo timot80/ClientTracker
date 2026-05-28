@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import argparse
 import sys
-from pathlib import Path
 
 from rich.console import Console
 
 from ap_radio_monitor.config import load_config
 from ap_radio_monitor.models import APBalanceConfig
+from wifiops.config_paths import default_config_path
 
 
-DEFAULT_CONFIG = Path(__file__).resolve().parent.parent / "config.yaml"
+DEFAULT_CONFIG = default_config_path(__file__)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

@@ -3,13 +3,13 @@ from __future__ import annotations
 import argparse
 import getpass
 import os
-from pathlib import Path
 import subprocess
 import sys
 from collections.abc import Sequence
 
+from wifiops.config_paths import default_config_arg, default_config_path
 
-DEFAULT_CONFIG = Path(__file__).resolve().parent.parent / "config.yaml"
+DEFAULT_CONFIG = default_config_path(__file__)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -138,8 +138,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     local.add_argument("--log", help="Optional CSV log path")
     local.add_argument("--interval", type=float, help="Polling interval in seconds")
+    local.add_argument("--config", help="Path to config.yaml")
 
-    subcommands.add_parser("check", help="Validate local client tracker setup and exit")
+    check = subcommands.add_parser("check", help="Validate local client tracker setup and exit")
+    check.add_argument("--config", help="Path to config.yaml")
     return parser
 
 
@@ -167,6 +169,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.mode == "combined" and not _macos_sudo_ready():
             return _macos_sudo_error()
         translated = [args.mac, "--mode", args.mode]
+        if default_config_arg():
+            translated.extend(default_config_arg())
         if args.interval is not None:
             translated.extend(["--interval", _format_number(args.interval)])
         if args.log is not None:
@@ -184,6 +188,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not _macos_sudo_ready():
             return _macos_sudo_error()
         translated = ["--mode", "local"]
+        if args.config:
+            translated.extend(["--config", args.config])
+        else:
+            translated.extend(default_config_arg())
         if args.interval is not None:
             translated.extend(["--interval", _format_number(args.interval)])
         if args.log is not None:
@@ -193,7 +201,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "check":
         from client_tracker.cli import main as client_main
 
-        return _exit_code(client_main(["--check"]))
+        translated = ["--check"]
+        if args.config:
+            translated.extend(["--config", args.config])
+        else:
+            translated.extend(default_config_arg())
+        return _exit_code(client_main(translated))
 
     parser.error("unknown command")
 
