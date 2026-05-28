@@ -273,6 +273,16 @@ def test_ap_filesystems_delegates_to_ap_filesystem_audit():
     fs_main.assert_called_once_with(["--config", "config.yaml", "--include", "MBY-*"])
 
 
+def test_probe_receive_delegates_to_probe_cli():
+    probe_main = Mock(return_value=0)
+
+    with patch("wifiops_probe.cli.main", probe_main):
+        exit_code = main(["probe", "receive", "--pair", "--host", "127.0.0.1", "--port", "8765"])
+
+    assert exit_code == 0
+    probe_main.assert_called_once_with(["--pair", "--host", "127.0.0.1", "--port", "8765"])
+
+
 def test_c9800_client_defaults_to_infra_mode():
     client_main = Mock(return_value=None)
 
