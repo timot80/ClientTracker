@@ -67,7 +67,7 @@ def _parse_record(record: Any) -> AndroidTelemetryRecord:
     for field in REQUIRED_RECORD_FIELDS:
         if field not in record:
             raise TelemetryValidationError("missing_field", f"record is missing required field {field}")
-    if record["schema_version"] != 1:
+    if type(record["schema_version"]) is not int or record["schema_version"] != 1:
         raise TelemetryValidationError("unsupported_schema", "schema_version must be 1")
     if record["record_type"] not in ("sample", "event"):
         raise TelemetryValidationError("invalid_record_type", "record_type must be sample or event")

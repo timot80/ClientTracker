@@ -103,6 +103,18 @@ def test_parse_record_batch_rejects_missing_android_api_level():
         raise AssertionError("expected TelemetryValidationError")
 
 
+def test_parse_record_batch_rejects_bool_schema_version():
+    sample = valid_sample()
+    sample["schema_version"] = True
+
+    try:
+        parse_record_batch({"records": [sample]})
+    except TelemetryValidationError as exc:
+        assert exc.code == "unsupported_schema"
+    else:
+        raise AssertionError("expected TelemetryValidationError")
+
+
 def test_parse_record_batch_rejects_array_body():
     try:
         parse_record_batch([])
