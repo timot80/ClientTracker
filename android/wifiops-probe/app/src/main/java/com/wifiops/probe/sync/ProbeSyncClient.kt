@@ -3,6 +3,9 @@ package com.wifiops.probe.sync
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -36,7 +39,35 @@ class ProbeSyncHttpException(
     val statusCode: Int,
     val responseBody: String
 ) : IOException("Upload failed with HTTP $statusCode: $responseBody") {
-    val isRetryable: Boolean = statusCode !in 400..499
+    val receiverErrorCode: String? = parseReceiverErrorCode(responseBody)
+    val isRetryable: Boolean = statusCode != 400 || receiverErrorCode !in NonRetryableValidationErrors
+
+    private companion object {
+        val NonRetryableValidationErrors = setOf(
+            "invalid_body",
+            "missing_records",
+            "too_many_records",
+            "invalid_record",
+            "missing_field",
+            "unsupported_schema",
+            "invalid_record_type",
+            "invalid_string",
+            "invalid_sequence",
+            "invalid_android_api_level",
+            "invalid_payload",
+            "invalid_timestamp",
+            "invalid_json",
+            "invalid_content_length"
+        )
+
+        fun parseReceiverErrorCode(raw: String): String? {
+            return runCatching {
+                Json.parseToJsonElement(raw).let { element ->
+                    (element as? JsonObject)?.get("error")?.jsonPrimitive?.contentOrNull
+                }
+            }.getOrNull()
+        }
+    }
 }
 
 class ProbeSyncClient(private val http: OkHttpClient = OkHttpClient()) : ProbeSyncTransport {

@@ -80,13 +80,28 @@ class ProbeSyncWorkerTest {
         val dao = FakeProbeRecordDao(mutableListOf(record("r1")))
         val worker = ProbeSyncWorker(
             dao,
-            FakeProbeSyncTransport(exception = ProbeSyncHttpException(400, "invalid_json"))
+            FakeProbeSyncTransport(exception = ProbeSyncHttpException(400, """{"error":"invalid_json"}"""))
         )
 
         worker.syncOnce("walk_1", "http://receiver", "token")
 
         assertEquals("failed", dao.record("r1").syncStatus)
         assertTrue(dao.record("r1").lastError.contains("HTTP 400"))
+    }
+
+    @Test
+    fun authErrorsRemainPendingForRepairAndRetry() = runTest {
+        val dao = FakeProbeRecordDao(mutableListOf(record("r1")))
+        val worker = ProbeSyncWorker(
+            dao,
+            FakeProbeSyncTransport(exception = ProbeSyncHttpException(401, """{"error":"unauthorized"}"""))
+        )
+
+        worker.syncOnce("walk_1", "http://receiver", "bad_token")
+
+        assertEquals("pending", dao.record("r1").syncStatus)
+        assertEquals(1, dao.record("r1").retryCount)
+        assertTrue(dao.record("r1").lastError.contains("HTTP 401"))
     }
 
     @Test
