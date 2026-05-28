@@ -42,9 +42,15 @@ def test_receiver_session_deduplicates_record_id():
     assert session.ingest(record) == "duplicate"
 
 
+def test_receiver_session_rejects_mismatched_session():
+    session = ReceiverSession(session_id="walk_20260527_abc123", token="secret")
+    record = telemetry_record(session_id="walk_20260527_other")
+
+    assert session.ingest(record) == "rejected_session"
+
+
 def test_receiver_session_rejects_mismatched_device_after_binding():
     session = ReceiverSession(session_id="walk_20260527_abc123", token="secret")
 
     assert session.ingest(telemetry_record(device_id="android_probe_9f3c")) == "accepted"
     assert session.ingest(telemetry_record(record_id="01JABD", device_id="android_probe_other")) == "rejected_device"
-
