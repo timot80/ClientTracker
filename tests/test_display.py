@@ -272,6 +272,17 @@ def test_build_monitor_table_does_not_render_no_data_for_dual_radio_single_repor
     assert "NO DATA" not in rendered
 
 
+def test_build_monitor_table_uses_ascii_balance_spread_label():
+    snapshot = LoadInfoSnapshot(ap_loads=[make_ap("NOC-AP-1", [1, 50])])
+    console = Console(record=True, width=120)
+
+    console.print(build_monitor_table(snapshot, APBalanceConfig()))
+    rendered = console.export_text()
+
+    assert "IMBALANCED 50:1 diff=49" in rendered
+    assert "Δ" not in rendered
+
+
 def test_build_monitor_table_limits_rows_and_reports_hidden_counts():
     aps = [make_ap(f"AP-{index}", [1, 1]) for index in range(4)]
     snapshot = LoadInfoSnapshot(ap_loads=aps)

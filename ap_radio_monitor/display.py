@@ -196,7 +196,7 @@ def _balance_text(score: BalanceScore) -> str:
         return "IDLE"
     if score.status == "BUSY-IDLE":
         return "BUSY-IDLE"
-    return f"{score.status} {ratio} Δ{score.spread}"
+    return f"{score.status} {ratio} diff={score.spread}"
 
 
 def _apply_visibility(
