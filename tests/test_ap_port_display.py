@@ -65,3 +65,18 @@ def test_build_port_table_renders_wlc_column_and_failures():
     assert "mby-1" in rendered
     assert "mby-2" in rendered
     assert "poll failed: timeout" in rendered
+
+
+def test_build_port_table_renders_success_state_with_failures_when_no_problem_rows():
+    console = Console(record=True, width=180)
+    snapshot = APPortSnapshot(
+        rows=[replace(row("OK-AP", speed_mbps=5000), wlc_name="mby-1")],
+        failures=[APPortFailure(wlc_name="mby-2", message="poll failed: timeout")],
+    )
+
+    console.print(build_port_table(snapshot, APPortAuditConfig()))
+    rendered = console.export_text()
+
+    assert "No AP Ethernet port issues found" in rendered
+    assert "mby-2" in rendered
+    assert "poll failed: timeout" in rendered

@@ -35,8 +35,10 @@ def resolve_wlc_targets(
         wlcs = raw["wlcs"]
         if not isinstance(wlcs, list):
             raise WlcTargetConfigError("wlcs must be a list")
+        if not wlcs:
+            raise WlcTargetConfigError("wlcs must contain at least one WLC")
         targets = [
-            _target_from_section(raw, f"wlcs[{index}]", item, env)
+            _target_from_section(raw, f"wlcs[{index}]", item, env, allow_host_env=False)
             for index, item in enumerate(wlcs)
         ]
         _validate_unique_names(targets)
@@ -68,6 +70,7 @@ def _target_from_section(
     section_data: Any,
     env: Mapping[str, str],
     default_name: str | None = None,
+    allow_host_env: bool = True,
 ) -> WlcTarget:
     if not isinstance(section_data, dict):
         raise WlcTargetConfigError(f"{section} must be a mapping")
@@ -78,7 +81,11 @@ def _target_from_section(
         credentials = resolve_credentials({**raw, section: section_data}, section, env, WLC_CREDENTIAL_ENV)
     except CredentialConfigError as exc:
         raise WlcTargetConfigError(str(exc)) from exc
-    host = env.get("CLIENT_TRACKER_WLC_HOST", str(section_data.get("host", ""))).strip()
+    host = (
+        env.get("CLIENT_TRACKER_WLC_HOST", str(section_data.get("host", "")))
+        if allow_host_env
+        else str(section_data.get("host", ""))
+    ).strip()
     if not host:
         raise WlcTargetConfigError(f"Missing required config value: {section}.host")
     if not credentials.username.strip():

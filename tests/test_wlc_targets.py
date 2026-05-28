@@ -44,7 +44,31 @@ def test_wlcs_resolves_all_targets_and_wins_over_wlc():
     assert [target.config.host for target in targets] == ["192.0.2.10", "192.0.2.11"]
 
 
+def test_wlcs_ignore_legacy_host_env_override():
+    raw = {
+        "wlcs": [
+            {"name": "mby-1", "host": "192.0.2.10", "username": "admin", "password": "secret"},
+            {"name": "mby-2", "host": "192.0.2.11", "username": "admin", "password": "secret"},
+        ],
+    }
+
+    targets = resolve_wlc_targets(raw, env={"CLIENT_TRACKER_WLC_HOST": "192.0.2.99"})
+
+    assert [target.config.host for target in targets] == ["192.0.2.10", "192.0.2.11"]
+
+
+def test_single_wlc_preserves_legacy_host_env_override():
+    raw = {"wlc": {"host": "192.0.2.10", "username": "admin", "password": "secret"}}
+
+    targets = resolve_wlc_targets(raw, env={"CLIENT_TRACKER_WLC_HOST": "192.0.2.99"})
+
+    assert targets[0].config.host == "192.0.2.99"
+
+
 def test_wlcs_rejects_missing_name_and_duplicate_name():
+    with pytest.raises(WlcTargetConfigError, match="wlcs must contain at least one WLC"):
+        resolve_wlc_targets({"wlcs": []}, env={})
+
     with pytest.raises(WlcTargetConfigError, match="wlcs\\[0\\].name"):
         resolve_wlc_targets(
             {"wlcs": [{"host": "192.0.2.10", "username": "admin", "password": "secret"}]},

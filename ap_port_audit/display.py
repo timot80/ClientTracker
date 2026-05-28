@@ -22,6 +22,9 @@ def build_port_table(snapshot: APPortSnapshot, config: APPortAuditConfig) -> Pan
     table.add_column("Port Status", no_wrap=True)
     table.add_column("Notes")
 
+    if not rows and snapshot.rows and snapshot.failures and not config.show_all:
+        table.add_row("", "No AP Ethernet port issues found", "", "", "", "", "", "", style="green")
+
     for row in rows:
         statuses = row_statuses(row, config)
         table.add_row(
