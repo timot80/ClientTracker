@@ -26,6 +26,31 @@ def test_get_ethernet_statistics_runs_expected_command(monkeypatch):
 
     assert output == "output"
     assert fake.commands == [
-        ("terminal length 0", {"expect_string": r"#", "read_timeout": 30}),
-        ("show ap ethernet statistics", {"expect_string": r"#", "read_timeout": 120}),
+        ("terminal length 0", {"expect_string": r"[>#]", "read_timeout": 30}),
+        ("show ap ethernet statistics", {"expect_string": r"[>#]", "read_timeout": 120}),
     ]
+
+
+def test_session_accepts_user_exec_prompt_for_read_only_command(monkeypatch):
+    class FakeConnection:
+        def __init__(self):
+            self.commands = []
+
+        def check_enable_mode(self):
+            return False
+
+        def send_command(self, command, **kwargs):
+            self.commands.append((command, kwargs))
+            return "output"
+
+        def disconnect(self):
+            pass
+
+    fake = FakeConnection()
+    monkeypatch.setattr("ap_port_audit.wlc.ConnectHandler", lambda **_kwargs: fake)
+    session = APPortAuditSession(WLCConfig(host="192.0.2.10", username="u", password="p"))
+
+    session.connect()
+    session.get_ethernet_statistics()
+
+    assert all(call[1]["expect_string"] == r"[>#]" for call in fake.commands)

@@ -8,6 +8,9 @@ from netmiko import ConnectHandler
 from ap_radio_monitor.models import WLCConfig
 
 
+PROMPT_RE = r"[>#]"
+
+
 class APPortAuditSession:
     def __init__(self, config: WLCConfig):
         self.config = config
@@ -24,7 +27,7 @@ class APPortAuditSession:
         )
         if self.config.enable and not self.connection.check_enable_mode():
             self.connection.enable()
-        self.connection.send_command("terminal length 0", expect_string=r"#", read_timeout=30)
+        self.connection.send_command("terminal length 0", expect_string=PROMPT_RE, read_timeout=30)
 
     def get_ethernet_statistics(self) -> str:
         with self._lock:
@@ -32,7 +35,7 @@ class APPortAuditSession:
                 raise RuntimeError("WLC session not connected")
             return self.connection.send_command(
                 "show ap ethernet statistics",
-                expect_string=r"#",
+                expect_string=PROMPT_RE,
                 read_timeout=self.config.read_timeout,
             )
 
