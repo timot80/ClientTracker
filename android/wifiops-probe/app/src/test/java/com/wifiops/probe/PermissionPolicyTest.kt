@@ -9,17 +9,23 @@ import org.junit.Test
 
 class PermissionPolicyTest {
     @Test
-    fun runtimePermissionsForAndroidThirteenIncludeNearbyNotificationsAndFineLocation() {
+    fun runtimePermissionsForAndroidThirteenIncludeNearbyAndNotificationsButNotFineLocation() {
         val permissions = requiredRuntimePermissions(Build.VERSION_CODES.TIRAMISU)
 
         assertEquals(
             listOf(
                 Manifest.permission.NEARBY_WIFI_DEVICES,
-                Manifest.permission.POST_NOTIFICATIONS,
-                Manifest.permission.ACCESS_FINE_LOCATION
+                Manifest.permission.POST_NOTIFICATIONS
             ),
             permissions
         )
+    }
+
+    @Test
+    fun runtimePermissionsForAndroidTwelveLAndBelowUseFineLocationForWifiIdentity() {
+        val permissions = requiredRuntimePermissions(Build.VERSION_CODES.S_V2)
+
+        assertEquals(listOf(Manifest.permission.ACCESS_FINE_LOCATION), permissions)
     }
 
     @Test
@@ -30,9 +36,31 @@ class PermissionPolicyTest {
     }
 
     @Test
+    fun notificationDenialIsLimitedDataNotBlocked() {
+        val checks = preflightChecks(
+            PermissionGrantState(
+                apiLevel = Build.VERSION_CODES.TIRAMISU,
+                nearbyWifiGranted = true,
+                fineLocationGranted = false,
+                backgroundLocationGranted = false,
+                notificationsGranted = false,
+                wifiConnected = true,
+                receiverReachable = true
+            )
+        )
+
+        val notificationCheck = checks.first { it.id == PreflightCheckId.Notifications }
+
+        assertEquals(PreflightState.LimitedData, notificationCheck.state)
+        assertFalse(notificationCheck.blocksSession)
+        assertEquals("Limited notification status", notificationCheck.title)
+    }
+
+    @Test
     fun backgroundLocationIsNeededForServiceWifiIdentityOnAndroidTenAndNewer() {
         assertTrue(needsBackgroundLocationForServiceWifiIdentity(Build.VERSION_CODES.Q))
-        assertTrue(needsBackgroundLocationForServiceWifiIdentity(Build.VERSION_CODES.UPSIDE_DOWN_CAKE))
+        assertTrue(needsBackgroundLocationForServiceWifiIdentity(Build.VERSION_CODES.S_V2))
+        assertFalse(needsBackgroundLocationForServiceWifiIdentity(Build.VERSION_CODES.TIRAMISU))
         assertFalse(needsBackgroundLocationForServiceWifiIdentity(Build.VERSION_CODES.P))
     }
 }

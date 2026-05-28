@@ -1,13 +1,15 @@
 package com.wifiops.probe
 
 import android.Manifest
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.net.Uri
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,8 +25,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.fillMaxSize
 import com.wifiops.probe.pairing.PairingPayload
+import com.wifiops.probe.data.RecordEntity
+import com.wifiops.probe.data.TelemetryRecord
 import com.wifiops.probe.service.ProbeForegroundService
 import com.wifiops.probe.sync.ProbeSyncClient
+import com.wifiops.probe.ui.LatestTelemetrySummary
 import com.wifiops.probe.ui.TelemetryCounters
 import com.wifiops.probe.ui.PairScreen
 import com.wifiops.probe.ui.SessionHistoryScreen
@@ -37,6 +42,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 
 class MainActivity : ComponentActivity() {
     private lateinit var database: ProbeDatabase
@@ -46,28 +52,34 @@ class MainActivity : ComponentActivity() {
     private var permissionMessage by mutableStateOf<String?>(null)
     private var sessionHistory by mutableStateOf<List<SessionSummary>>(emptyList())
     private var sessionCounters by mutableStateOf(TelemetryCounters())
+    private var latestTelemetry by mutableStateOf<LatestTelemetrySummary?>(null)
     private var receiverReachable by mutableStateOf<Boolean?>(null)
     private var savedPairing by mutableStateOf<PairingPayload?>(null)
+    private var preflightChecks by mutableStateOf<List<PreflightCheck>>(emptyList())
     private var counterRefreshJob: Job? = null
     private val syncClient = ProbeSyncClient()
+    private val serviceStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            syncProbeRunningFromServiceState()
+        }
+    }
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
-        if (results.values.all { it }) {
+        val blockingDenied = requiredRuntimePermissions()
+            .filterNot { it == Manifest.permission.POST_NOTIFICATIONS }
+            .any { permission -> results[permission] == false && !hasPermission(permission) }
+        if (!blockingDenied) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                !hasPermission(Manifest.permission.POST_NOTIFICATIONS)
+            ) {
+                permissionMessage = "Notifications are off. Collection can continue, but session status may not appear while the app is backgrounded."
+            }
             startProbeWithPermissions()
         } else {
             permissionMessage = "Required Wi-Fi probe permissions were not granted."
-        }
-    }
-
-    private val appSettingsLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) {
-        if (hasBackgroundLocationForServiceWifiIdentity()) {
-            startProbeService()
-        } else {
-            permissionMessage = "Set Location to Allow all the time so the service can read SSID and BSSID."
+            refreshPreflightChecks()
         }
     }
 
@@ -79,7 +91,9 @@ class MainActivity : ComponentActivity() {
             "wifiops-probe.db"
         ).build()
         savedPairing = loadSavedPairing()
+        restorePairingFromIntent(intent)
         refreshSessionHistory()
+        refreshPreflightChecks()
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -92,13 +106,18 @@ class MainActivity : ComponentActivity() {
                                 savedPairing = it
                                 savePairing(it)
                                 sessionCounters = TelemetryCounters()
+                                latestTelemetry = null
                                 permissionMessage = null
                                 showingHistory = false
+                                refreshSessionData(it.sessionId)
+                                refreshReceiverReachability(it.receiverUrl)
+                                refreshPreflightChecks()
                             }
                         )
 
                         showingHistory -> SessionHistoryScreen(
                             sessions = sessionHistory,
+                            activeSessionId = paired.sessionId.takeIf { probeRunning },
                             onBack = { showingHistory = false },
                             onExport = { exportSessionSummary(it) },
                             onDelete = { deleteSession(it) }
@@ -110,6 +129,8 @@ class MainActivity : ComponentActivity() {
                                 running = probeRunning,
                                 receiverReachable = receiverReachable,
                                 counters = sessionCounters,
+                                latestTelemetry = latestTelemetry,
+                                preflightChecks = preflightChecks,
                                 permissionMessage = permissionMessage
                             ),
                             onStart = { startProbeWithPermissions() },
@@ -131,27 +152,56 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        restorePairingFromIntent(intent)
+        syncProbeRunningFromServiceState()
+        pairingPayload?.let {
+            refreshSessionData(it.sessionId)
+            refreshReceiverReachability(it.receiverUrl)
+        }
+        refreshPreflightChecks()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        registerReceiverCompat()
+        syncProbeRunningFromServiceState()
+        refreshPreflightChecks()
+    }
+
+    override fun onPause() {
+        unregisterReceiver(serviceStateReceiver)
+        super.onPause()
+    }
+
     private fun startProbeWithPermissions() {
         val missingPermissions = requiredRuntimePermissions()
+            .filterNot { it == Manifest.permission.POST_NOTIFICATIONS }
             .filter { permission ->
                 !hasPermission(permission)
             }
 
-        when {
-            missingPermissions.isNotEmpty() -> {
-                permissionLauncher.launch(missingPermissions.toTypedArray())
+        if (missingPermissions.isNotEmpty()) {
+            permissionLauncher.launch(missingPermissions.toTypedArray())
+        } else {
+            val currentPreflightChecks = computePreflightChecks()
+            preflightChecks = currentPreflightChecks
+            val blockingCheck = currentPreflightChecks.firstOrNull { it.blocksSession }
+            if (blockingCheck != null) {
+                permissionMessage = "${blockingCheck.title}: ${blockingCheck.detail}"
+                return
             }
-
-            !hasBackgroundLocationForServiceWifiIdentity() -> {
-                permissionMessage = "Set Location to Allow all the time so the service can read SSID and BSSID."
-                appSettingsLauncher.launch(
-                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                        .setData(Uri.fromParts("package", packageName, null))
-                )
-            }
-
-            else -> startProbeService()
+            continueAfterRuntimePermissions()
         }
+    }
+
+    private fun continueAfterRuntimePermissions() {
+        if (!hasBackgroundLocationForServiceWifiIdentity()) {
+            permissionMessage = "Background location is off. Foreground collection can start, but Wi-Fi identity may be limited when the app is backgrounded."
+        }
+        startProbeService()
     }
 
     private fun hasBackgroundLocationForServiceWifiIdentity(): Boolean {
@@ -165,11 +215,16 @@ class MainActivity : ComponentActivity() {
 
     private fun startProbeService() {
         val paired = pairingPayload ?: run {
-            permissionMessage = "Pair a receiver before starting."
+            permissionMessage = "Set up a receiver before starting."
             return
         }
-        permissionMessage = null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            hasPermission(Manifest.permission.POST_NOTIFICATIONS)
+        ) {
+            permissionMessage = null
+        }
         receiverReachable = null
+        setProbeServiceState(running = true, sessionId = paired.sessionId)
         ContextCompat.startForegroundService(
             this,
             Intent(this, ProbeForegroundService::class.java)
@@ -179,6 +234,7 @@ class MainActivity : ComponentActivity() {
         )
         probeRunning = true
         refreshSessionHistory()
+        refreshPreflightChecks()
         startCounterRefresh(paired.sessionId)
     }
 
@@ -188,27 +244,36 @@ class MainActivity : ComponentActivity() {
         counterRefreshJob?.cancel()
         counterRefreshJob = null
         receiverReachable = null
-        pairingPayload?.sessionId?.let { refreshSessionCounters(it) }
+        setProbeServiceState(running = false, sessionId = pairingPayload?.sessionId)
+        pairingPayload?.sessionId?.let { refreshSessionData(it) }
+        refreshPreflightChecks()
     }
 
     private fun startCounterRefresh(sessionId: String) {
         counterRefreshJob?.cancel()
         counterRefreshJob = lifecycleScope.launch {
             while (isActive) {
-                refreshSessionCounters(sessionId)
+                syncProbeRunningFromServiceState()
+                if (!probeRunning) {
+                    counterRefreshJob = null
+                    break
+                }
+                refreshSessionData(sessionId)
                 pairingPayload?.receiverUrl?.let { refreshReceiverReachability(it) }
                 refreshSessionHistory()
+                refreshPreflightChecks()
                 delay(1_000)
             }
         }
     }
 
-    private fun refreshSessionCounters(sessionId: String) {
+    private fun refreshSessionData(sessionId: String) {
         if (!::database.isInitialized) {
             return
         }
         lifecycleScope.launch {
             sessionCounters = loadCounters(sessionId)
+            latestTelemetry = loadLatestTelemetrySummary(sessionId)
         }
     }
 
@@ -217,7 +282,37 @@ class MainActivity : ComponentActivity() {
             receiverReachable = withContext(Dispatchers.IO) {
                 runCatching { syncClient.health(receiverUrl) }.getOrDefault(false)
             }
+            refreshPreflightChecks()
         }
+    }
+
+    private fun refreshPreflightChecks() {
+        preflightChecks = computePreflightChecks()
+    }
+
+    private fun computePreflightChecks(): List<PreflightCheck> {
+        val grants = PermissionGrantState(
+            apiLevel = Build.VERSION.SDK_INT,
+            nearbyWifiGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                hasPermission(Manifest.permission.NEARBY_WIFI_DEVICES)
+            } else {
+                false
+            },
+            fineLocationGranted = hasPermission(Manifest.permission.ACCESS_FINE_LOCATION),
+            backgroundLocationGranted = hasPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION),
+            notificationsGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                hasPermission(Manifest.permission.POST_NOTIFICATIONS),
+            wifiConnected = isWifiConnected(),
+            receiverReachable = receiverReachable
+        )
+        return preflightChecks(grants)
+    }
+
+    private fun isWifiConnected(): Boolean {
+        val connectivityManager = getSystemService(ConnectivityManager::class.java)
+        val network = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
     }
 
     private fun refreshSessionHistory() {
@@ -251,11 +346,75 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    private suspend fun loadLatestTelemetrySummary(sessionId: String): LatestTelemetrySummary? = withContext(Dispatchers.IO) {
+        database.probeRecordDao()
+            .latestRecordForSession(sessionId)
+            ?.toLatestTelemetrySummary()
+    }
+
+    private fun RecordEntity.toLatestTelemetrySummary(): LatestTelemetrySummary {
+        val record = runCatching {
+            TelemetryJson.decodeFromString(TelemetryRecord.serializer(), payloadJson)
+        }.getOrNull() ?: return LatestTelemetrySummary(
+            availability = "Limited",
+            uploadStatus = syncStatusLabel(syncStatus)
+        )
+        val payload = record.payload
+        return LatestTelemetrySummary(
+            ssid = payload.ssid,
+            bssid = payload.bssid,
+            rssi = payload.rssi,
+            channel = payload.channel,
+            frequencyMhz = payload.frequencyMhz,
+            availability = availabilityLabel(payload.availability, payload.ssid, payload.bssid, payload.rssi, payload.channel),
+            sampleTime = record.clientTimestamp,
+            uploadStatus = syncStatusLabel(syncStatus),
+            gatewayProbe = probeStatus(payload.probes["gateway"]),
+            dnsProbe = probeStatus(payload.probes["dns"]),
+            httpProbe = probeStatus(payload.probes["http"])
+        )
+    }
+
+    private fun availabilityLabel(
+        availability: Map<String, String>,
+        ssid: String?,
+        bssid: String?,
+        rssi: Int?,
+        channel: String?
+    ): String {
+        return when {
+            availability.values.any { it.contains("redacted", ignoreCase = true) } -> "Redacted"
+            ssid != null && bssid != null && rssi != null && channel != null -> "Available"
+            availability.isNotEmpty() -> "Limited"
+            else -> "Unavailable"
+        }
+    }
+
+    private fun syncStatusLabel(status: String): String {
+        return when (status) {
+            "pending" -> "Pending upload"
+            "synced" -> "Synced"
+            "failed" -> "Upload failed"
+            else -> status.ifBlank { "Unknown" }
+        }
+    }
+
+    private fun probeStatus(probe: com.wifiops.probe.telemetry.ProbeResult?): String {
+        return when {
+            probe == null -> "Unavailable"
+            probe.ok && probe.latencyMs != null -> "OK ${probe.latencyMs} ms"
+            probe.ok -> "OK"
+            probe.detail.isNotBlank() -> "Failed: ${probe.detail}"
+            else -> "Failed"
+        }
+    }
+
     private fun deleteSession(sessionId: String) {
         if (pairingPayload?.sessionId == sessionId) {
             stopProbeService()
             pairingPayload = null
             sessionCounters = TelemetryCounters()
+            latestTelemetry = null
             receiverReachable = null
             showingHistory = false
         }
@@ -269,23 +428,73 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun restorePairingFromIntent(intent: Intent?) {
+        val receiverUrl = intent?.getStringExtra(ProbeForegroundService.EXTRA_RECEIVER_URL).orEmpty()
+        val sessionId = intent?.getStringExtra(ProbeForegroundService.EXTRA_SESSION_ID).orEmpty()
+        val token = intent?.getStringExtra(ProbeForegroundService.EXTRA_TOKEN).orEmpty()
+        if (receiverUrl.isBlank() || sessionId.isBlank() || token.isBlank()) {
+            return
+        }
+        runCatching {
+            PairingPayload.fromManualFields(receiverUrl, sessionId, token)
+        }.onSuccess {
+            pairingPayload = it
+            savedPairing = it
+            savePairing(it)
+            showingHistory = false
+        }
+    }
+
+    private fun syncProbeRunningFromServiceState() {
+        val preferences = getSharedPreferences(SERVICE_PREFS, Context.MODE_PRIVATE)
+        val running = preferences.getBoolean(KEY_SERVICE_RUNNING, false)
+        val sessionId = preferences.getString(KEY_SERVICE_SESSION_ID, "").orEmpty()
+        if (!running && probeRunning) {
+            probeRunning = false
+            counterRefreshJob?.cancel()
+            counterRefreshJob = null
+        } else if (running && pairingPayload?.sessionId == sessionId) {
+            probeRunning = true
+        }
+    }
+
+    private fun setProbeServiceState(running: Boolean, sessionId: String?) {
+        getSharedPreferences(SERVICE_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_SERVICE_RUNNING, running)
+            .putString(KEY_SERVICE_SESSION_ID, sessionId.orEmpty())
+            .apply()
+    }
+
+    private fun registerReceiverCompat() {
+        val filter = IntentFilter(ProbeForegroundService.ACTION_STATE_CHANGED)
+        ContextCompat.registerReceiver(
+            this,
+            serviceStateReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+    }
+
     private fun exportSessionSummary(sessionId: String) {
         val session = sessionHistory.firstOrNull { it.sessionId == sessionId } ?: return
         val text = buildString {
-            appendLine("wifiops Android probe session")
+            appendLine("Wi-Fi Ops Probe session summary")
             appendLine("Session: ${session.sessionId}")
             appendLine("Receiver: ${session.receiverUrl}")
             appendLine("Pending: ${session.counters.pending}")
             appendLine("Synced: ${session.counters.synced}")
             appendLine("Failed: ${session.counters.failed}")
+            appendLine()
+            appendLine("Raw record export is not included in this summary. Raw records may contain network identifiers and device/session metadata.")
         }
         startActivity(
             Intent.createChooser(
                 Intent(Intent.ACTION_SEND)
                     .setType("text/plain")
-                    .putExtra(Intent.EXTRA_SUBJECT, "wifiops probe ${session.sessionId}")
+                    .putExtra(Intent.EXTRA_SUBJECT, "Wi-Fi Ops Probe ${session.sessionId}")
                     .putExtra(Intent.EXTRA_TEXT, text),
-                "Export session"
+                "Export summary"
             )
         )
     }
@@ -310,9 +519,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private companion object {
+        val TelemetryJson = Json { ignoreUnknownKeys = true }
         const val PAIRING_PREFS = "pairing"
+        const val SERVICE_PREFS = "probe_service"
         const val KEY_RECEIVER_URL = "receiver_url"
         const val KEY_SESSION_ID = "session_id"
         const val KEY_TOKEN = "token"
+        const val KEY_SERVICE_RUNNING = "running"
+        const val KEY_SERVICE_SESSION_ID = "session_id"
     }
 }

@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.wifiops.probe.PreflightCheck
 import com.wifiops.probe.pairing.PairingPayload
 
 data class TelemetryCounters(
@@ -25,11 +26,27 @@ data class TelemetryCounters(
     val failed: Int = 0
 )
 
+data class LatestTelemetrySummary(
+    val ssid: String? = null,
+    val bssid: String? = null,
+    val rssi: Int? = null,
+    val channel: String? = null,
+    val frequencyMhz: Int? = null,
+    val availability: String = "Unavailable",
+    val sampleTime: String? = null,
+    val uploadStatus: String = "No sample yet",
+    val gatewayProbe: String = "Unavailable",
+    val dnsProbe: String = "Unavailable",
+    val httpProbe: String = "Unavailable"
+)
+
 data class SessionUiState(
     val pairing: PairingPayload,
     val running: Boolean = false,
     val receiverReachable: Boolean? = null,
     val counters: TelemetryCounters = TelemetryCounters(),
+    val latestTelemetry: LatestTelemetrySummary? = null,
+    val preflightChecks: List<PreflightCheck> = emptyList(),
     val permissionMessage: String? = null
 )
 
@@ -50,7 +67,7 @@ fun SessionScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text(
-            text = "Session controls",
+            text = "Active session",
             style = MaterialTheme.typography.headlineSmall
         )
         StatusLine(label = "Receiver", value = state.pairing.receiverUrl)
@@ -64,6 +81,27 @@ fun SessionScreen(
                 null -> "Not checked"
             }
         )
+
+        if (state.preflightChecks.isNotEmpty()) {
+            HorizontalDivider()
+            Text(
+                text = "Preflight",
+                style = MaterialTheme.typography.titleMedium
+            )
+            state.preflightChecks.forEach { check ->
+                StatusLine(
+                    label = check.title,
+                    value = "${check.state.label}: ${check.detail}"
+                )
+            }
+        }
+
+        HorizontalDivider()
+        Text(
+            text = "Latest Wi-Fi sample",
+            style = MaterialTheme.typography.titleMedium
+        )
+        LatestTelemetry(state.latestTelemetry)
 
         HorizontalDivider()
         Text(
@@ -86,15 +124,15 @@ fun SessionScreen(
         ) {
             if (state.running) {
                 Button(onClick = onStop, modifier = Modifier.weight(1f)) {
-                    Text("Stop")
+                    Text("Stop session")
                 }
             } else {
                 Button(onClick = onStart, modifier = Modifier.weight(1f)) {
-                    Text("Start")
+                    Text("Start session")
                 }
             }
             OutlinedButton(onClick = onPairDifferentReceiver, modifier = Modifier.weight(1f)) {
-                Text("Pair")
+                Text("Change receiver")
             }
         }
 
@@ -105,6 +143,34 @@ fun SessionScreen(
             Text("Session history")
         }
     }
+}
+
+@Composable
+private fun LatestTelemetry(summary: LatestTelemetrySummary?) {
+    if (summary == null) {
+        StatusLine(label = "Last sample", value = "No sample yet")
+        StatusLine(label = "Availability", value = "Unavailable")
+        return
+    }
+
+    StatusLine(label = "SSID", value = summary.ssid ?: "Unavailable")
+    StatusLine(label = "BSSID", value = summary.bssid ?: "Unavailable")
+    StatusLine(label = "RSSI", value = summary.rssi?.let { "$it dBm" } ?: "Unavailable")
+    StatusLine(
+        label = "Channel",
+        value = when {
+            summary.channel != null && summary.frequencyMhz != null -> "${summary.channel} (${summary.frequencyMhz} MHz)"
+            summary.channel != null -> summary.channel
+            summary.frequencyMhz != null -> "${summary.frequencyMhz} MHz"
+            else -> "Unavailable"
+        }
+    )
+    StatusLine(label = "Availability", value = summary.availability)
+    StatusLine(label = "Last sample", value = summary.sampleTime ?: "No sample yet")
+    StatusLine(label = "Last upload status", value = summary.uploadStatus)
+    StatusLine(label = "Gateway probe", value = summary.gatewayProbe)
+    StatusLine(label = "DNS probe", value = summary.dnsProbe)
+    StatusLine(label = "HTTP probe", value = summary.httpProbe)
 }
 
 @Composable

@@ -3,6 +3,7 @@ package com.wifiops.probe.service
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -12,6 +13,7 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.room.Room
+import com.wifiops.probe.MainActivity
 import com.wifiops.probe.data.ProbeDatabase
 import com.wifiops.probe.data.RecordEntity
 import com.wifiops.probe.data.SessionEntity
@@ -58,10 +60,19 @@ class ProbeForegroundService : Service() {
         collector = WifiTelemetryCollector(wifiManager, connectivityManager)
         syncWorker = ProbeSyncWorker(database.probeRecordDao(), ProbeSyncClient())
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, notification("wifiops walk test running"))
+        startForeground(NOTIFICATION_ID, notification("Starting collection"))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            collectionJob?.cancel()
+            collectionJob = null
+            activeSessionId = null
+            publishServiceState(running = false, session = null)
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
+
         val session = sessionFromIntent(intent)
         if (session == null) {
             stopSelf(startId)
@@ -73,9 +84,10 @@ class ProbeForegroundService : Service() {
             activeSessionId = session.sessionId
             sequenceNumber = 0L
         }
+        publishServiceState(running = true, session = session)
 
         if (collectionJob?.isActive == true) {
-            startForeground(NOTIFICATION_ID, notification("wifiops session ${session.sessionId} running"))
+            startForeground(NOTIFICATION_ID, notification("Session ${session.sessionId}: collection active"))
             return START_STICKY
         }
 
@@ -84,13 +96,14 @@ class ProbeForegroundService : Service() {
             sequenceNumber = database.probeRecordDao().maxSequenceForSession(session.sessionId)
             collectAndSync(session)
         }
-        startForeground(NOTIFICATION_ID, notification("wifiops session ${session.sessionId} running"))
+        startForeground(NOTIFICATION_ID, notification("Session ${session.sessionId}: collection active"))
         return START_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        publishServiceState(running = false, session = null)
         serviceScope.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
@@ -123,7 +136,10 @@ class ProbeForegroundService : Service() {
                     createdAtMillis = System.currentTimeMillis()
                 )
             )
-            syncWorker.syncOnce(session.sessionId, session.receiverUrl, session.token)
+            val synced = syncWorker.syncOnce(session.sessionId, session.receiverUrl, session.token)
+            updateNotification(
+                "Session ${session.sessionId}: collected sample #$sequenceNumber, uploaded $synced pending records"
+            )
             delay(SAMPLE_INTERVAL_MS)
         }
     }
@@ -173,19 +189,59 @@ class ProbeForegroundService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Probe",
+                "Wi-Fi Ops Probe",
                 NotificationManager.IMPORTANCE_LOW
             )
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
     }
 
+    private fun updateNotification(text: String) {
+        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(text))
+    }
+
     private fun notification(text: String): Notification {
+        val session = activeSessionId
+        val contentIntent = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java)
+                .setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                .apply {
+                    activeSessionDetails?.let {
+                        putExtra(EXTRA_RECEIVER_URL, it.receiverUrl)
+                        putExtra(EXTRA_SESSION_ID, it.sessionId)
+                        putExtra(EXTRA_TOKEN, it.token)
+                    }
+                },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val stopIntent = PendingIntent.getService(
+            this,
+            1,
+            Intent(this, ProbeForegroundService::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_upload)
+            .setContentTitle("Wi-Fi Ops Probe running")
             .setContentText(text)
+            .setContentIntent(contentIntent)
             .setOngoing(true)
+            .addAction(android.R.drawable.ic_media_pause, "Stop session", stopIntent)
             .build()
+    }
+
+    private var activeSessionDetails: SessionEntity? = null
+
+    private fun publishServiceState(running: Boolean, session: SessionEntity?) {
+        activeSessionDetails = session
+        getSharedPreferences(SERVICE_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_SERVICE_RUNNING, running)
+            .putString(KEY_SERVICE_SESSION_ID, session?.sessionId.orEmpty())
+            .apply()
+        sendBroadcast(Intent(ACTION_STATE_CHANGED).setPackage(packageName))
     }
 
     companion object {
@@ -193,8 +249,13 @@ class ProbeForegroundService : Service() {
         const val EXTRA_SESSION_ID = "com.wifiops.probe.extra.SESSION_ID"
         const val EXTRA_TOKEN = "com.wifiops.probe.extra.TOKEN"
 
+        const val ACTION_STOP = "com.wifiops.probe.action.STOP"
+        const val ACTION_STATE_CHANGED = "com.wifiops.probe.action.STATE_CHANGED"
         const val CHANNEL_ID = "probe"
         const val NOTIFICATION_ID = 1001
+        const val SERVICE_PREFS = "probe_service"
+        const val KEY_SERVICE_RUNNING = "running"
+        const val KEY_SERVICE_SESSION_ID = "session_id"
         const val SAMPLE_INTERVAL_MS = 1_000L
         const val ACTIVE_PROBE_TIMEOUT_MS = 1_000
         const val DNS_PORT = 53

@@ -201,6 +201,12 @@ private class FakeProbeRecordDao(
         return records.filter { it.sessionId == sessionId }.maxOfOrNull { it.sequenceNumber } ?: 0L
     }
 
+    override suspend fun latestRecordForSession(sessionId: String): RecordEntity? {
+        return records
+            .filter { it.sessionId == sessionId }
+            .maxByOrNull { it.sequenceNumber }
+    }
+
     override suspend fun sessions(): List<SessionEntity> = emptyList()
 
     override suspend fun deleteRecordsForSession(sessionId: String) = Unit

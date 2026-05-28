@@ -7,16 +7,22 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="32" />
+    <uses-permission
+        android:name="android.permission.ACCESS_BACKGROUND_LOCATION"
+        android:maxSdkVersion="32" />
     <uses-permission
         android:name="android.permission.ACCESS_COARSE_LOCATION"
         android:maxSdkVersion="32" />
 
     <application
         android:allowBackup="false"
-        android:label="wifiops probe"
+        android:label="Wi-Fi Ops Probe"
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">

@@ -47,13 +47,35 @@ fun PairScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
-            text = "Pair receiver",
+            text = "Receiver setup",
             style = MaterialTheme.typography.headlineSmall
         )
         Text(
-            text = "Enter the receiver values shown by the wifiops pairing command.",
+            text = "Enter the receiver values shown by the wifiops receiver setup command.",
             style = MaterialTheme.typography.bodyMedium
         )
+
+        savedPairing?.let { saved ->
+            Text(
+                text = "Saved receiver",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = saved.receiverUrl,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            OutlinedButton(
+                onClick = { onPaired(saved) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Use saved receiver")
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Set up new receiver",
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
 
         OutlinedTextField(
             value = receiverUrl,
@@ -87,17 +109,17 @@ fun PairScreen(
                     error = null
                     onPaired(it)
                 }.onFailure {
-                    error = it.message ?: "Pairing values are invalid"
+                    error = it.message ?: "Receiver setup values are invalid"
                 }
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Pair manually")
+            Text("Set up new receiver")
         }
 
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Or paste pairing JSON",
+            text = "Or paste receiver setup JSON",
             style = MaterialTheme.typography.titleMedium
         )
         OutlinedTextField(
@@ -106,7 +128,7 @@ fun PairScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(112.dp),
-            label = { Text("Pairing JSON") }
+            label = { Text("Receiver setup JSON") }
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -123,7 +145,7 @@ fun PairScreen(
                         token = it.token
                         onPaired(it)
                     }.onFailure {
-                        error = it.message ?: "Pairing JSON is invalid"
+                        error = it.message ?: "Receiver setup JSON is invalid"
                     }
                 }
             ) {
