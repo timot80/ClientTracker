@@ -17,6 +17,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,6 +32,9 @@ import com.wifiops.probe.pairing.PairingPayload
 fun PairScreen(
     modifier: Modifier = Modifier,
     savedPairing: PairingPayload? = null,
+    cameraPermissionGranted: Boolean = false,
+    cameraPermissionMessage: String? = null,
+    onRequestCameraPermission: () -> Unit = {},
     onPaired: (PairingPayload) -> Unit
 ) {
     var receiverUrl by remember(savedPairing) { mutableStateOf(savedPairing?.receiverUrl.orEmpty()) }
@@ -38,6 +42,15 @@ fun PairScreen(
     var token by remember(savedPairing) { mutableStateOf(savedPairing?.token.orEmpty()) }
     var payloadJson by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var scanning by remember { mutableStateOf(false) }
+    var waitingForCameraPermission by remember { mutableStateOf(false) }
+
+    LaunchedEffect(cameraPermissionGranted, waitingForCameraPermission) {
+        if (cameraPermissionGranted && waitingForCameraPermission) {
+            scanning = true
+            waitingForCameraPermission = false
+        }
+    }
 
     Column(
         modifier = modifier
@@ -51,15 +64,61 @@ fun PairScreen(
             style = MaterialTheme.typography.headlineSmall
         )
         Text(
-            text = "Scan the receiver QR code when scanner support lands, or paste the setup JSON shown by the receiver.",
+            text = "Scan the receiver QR code, paste setup JSON, or enter receiver details.",
             style = MaterialTheme.typography.bodyMedium
         )
         Button(
-            onClick = {},
-            enabled = false,
+            onClick = {
+                error = null
+                if (cameraPermissionGranted) {
+                    scanning = true
+                } else {
+                    waitingForCameraPermission = true
+                    onRequestCameraPermission()
+                }
+            },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Scan receiver QR code (coming next)")
+            Text("Scan receiver QR code")
+        }
+        cameraPermissionMessage?.let {
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+
+        if (scanning) {
+            Text(
+                text = "Point the camera at the receiver setup QR code.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            QrScannerView(
+                onQrText = { raw ->
+                    runCatching {
+                        PairingPayload.parse(raw)
+                    }.onSuccess {
+                        error = null
+                        receiverUrl = it.receiverUrl
+                        sessionId = it.sessionId
+                        token = it.token
+                        scanning = false
+                        onPaired(it)
+                    }.onFailure {
+                        error = it.message ?: "QR code does not contain receiver setup JSON"
+                    }
+                },
+                onError = {
+                    error = it
+                }
+            )
+            OutlinedButton(
+                onClick = { scanning = false },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Cancel scan")
+            }
         }
 
         savedPairing?.let { saved ->

@@ -60,6 +60,7 @@ class MainActivity : ComponentActivity() {
     private var receiverReachable by mutableStateOf<Boolean?>(null)
     private var savedPairing by mutableStateOf<PairingPayload?>(null)
     private var preflightChecks by mutableStateOf<List<PreflightCheck>>(emptyList())
+    private var cameraPermissionGranted by mutableStateOf(false)
     private var counterRefreshJob: Job? = null
     private val syncClient = ProbeSyncClient()
     private val serviceStateReceiver = object : BroadcastReceiver() {
@@ -87,6 +88,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val cameraPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        cameraPermissionGranted = granted
+        if (!granted) {
+            permissionMessage = "Camera permission is required to scan receiver QR codes."
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         database = Room.databaseBuilder(
@@ -94,6 +104,7 @@ class MainActivity : ComponentActivity() {
             ProbeDatabase::class.java,
             "wifiops-probe.db"
         ).build()
+        cameraPermissionGranted = hasPermission(Manifest.permission.CAMERA)
         savedPairing = loadSavedPairing()
         restorePairingFromIntent(intent)
         refreshSessionHistory()
@@ -105,6 +116,12 @@ class MainActivity : ComponentActivity() {
                     when {
                         paired == null -> PairScreen(
                             savedPairing = savedPairing,
+                            cameraPermissionGranted = cameraPermissionGranted,
+                            cameraPermissionMessage = permissionMessage,
+                            onRequestCameraPermission = {
+                                permissionMessage = null
+                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                            },
                             onPaired = {
                                 pairingPayload = it
                                 savedPairing = it
