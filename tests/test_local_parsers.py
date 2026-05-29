@@ -4,6 +4,7 @@ import os
 import pytest
 
 from client_tracker.local import LocalTelemetryPoller
+from client_tracker.local import parse_android_latest_payload
 from client_tracker.local import default_macos_identity_helper_path
 from client_tracker.local import parse_airport_output, parse_identity_helper_output
 from client_tracker.local import parse_netsh_output, parse_wdutil_output
@@ -48,6 +49,100 @@ def test_parse_netsh_output_preserves_multi_word_ssid_and_signal():
     assert state.tx_rate == "960"
     assert state.signal == "-59.0 approx dBm"
     assert state.platform == "win32"
+
+
+def test_parse_android_latest_payload_maps_raw_probe_sample():
+    state = parse_android_latest_payload(
+        {
+            "ssid": "Corp Guest WiFi",
+            "bssid": "aa:bb:cc:dd:ee:ff",
+            "rssi": -61,
+            "channel": 36,
+            "frequency_mhz": 5180,
+            "tx_link_mbps": 1201,
+            "rx_link_mbps": 960,
+            "wifi_standard": "11ax",
+            "security": "WPA3 Enterprise",
+            "ipv4_address": "10.23.4.156",
+            "gateway": "10.23.4.1",
+            "probe_status": "ok",
+            "probe_summary": "gateway reachable",
+        }
+    )
+
+    assert state.ssid == "Corp Guest WiFi"
+    assert state.bssid == "aa:bb:cc:dd:ee:ff"
+    assert state.signal == "-61"
+    assert state.channel == "36"
+    assert state.tx_rate == "1201"
+    assert state.rx_rate == "960"
+    assert state.phy_mode == "11ax"
+    assert state.security == "WPA3 Enterprise"
+    assert state.ipv4_address == "10.23.4.156"
+    assert state.ipv4_router == "10.23.4.1"
+    assert state.ping_status == "ok: gateway reachable"
+    assert state.platform == "android"
+
+
+def test_parse_android_latest_payload_accepts_latest_record_wrapper_and_link_fallback():
+    state = parse_android_latest_payload(
+        {
+            "latest": {
+                "record": {
+                    "ssid": "Corp Guest WiFi",
+                    "bssid": "aa:bb:cc:dd:ee:ff",
+                    "signal": "-64 dBm",
+                    "frequency_mhz": 5975,
+                    "link_mbps": 688,
+                    "probe": {"status": "degraded", "summary": "dns timeout"},
+                }
+            }
+        }
+    )
+
+    assert state.ssid == "Corp Guest WiFi"
+    assert state.bssid == "aa:bb:cc:dd:ee:ff"
+    assert state.signal == "-64 dBm"
+    assert state.channel == "5975 MHz"
+    assert state.tx_rate == "688"
+    assert state.rx_rate == "688"
+    assert state.ping_status == "degraded: dns timeout"
+    assert state.platform == "android"
+
+
+def test_parse_android_latest_payload_accepts_receiver_payload_wrapper():
+    state = parse_android_latest_payload(
+        {
+            "latest": {
+                "payload": {
+                    "ssid": "Corp WiFi",
+                    "bssid": "11:22:33:44:55:66",
+                    "rssi": -58,
+                    "txLinkMbps": 866,
+                    "rxLinkMbps": 721,
+                    "wifiStandard": "11ac",
+                    "ipv4Address": "10.10.10.25",
+                    "ipv4Gateway": "10.10.10.1",
+                    "probeStatus": "ok",
+                }
+            }
+        }
+    )
+
+    assert state.ssid == "Corp WiFi"
+    assert state.bssid == "11:22:33:44:55:66"
+    assert state.signal == "-58"
+    assert state.tx_rate == "866"
+    assert state.rx_rate == "721"
+    assert state.phy_mode == "11ac"
+    assert state.ipv4_address == "10.10.10.25"
+    assert state.ipv4_router == "10.10.10.1"
+    assert state.ping_status == "ok"
+
+
+def test_parse_android_latest_payload_rejects_non_object_payload():
+    with pytest.raises(ValueError, match="must be a JSON object"):
+        parse_android_latest_payload({"latest": None})
 
 
 def test_parse_wdutil_output_preserves_roam_fields():

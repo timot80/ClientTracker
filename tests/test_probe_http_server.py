@@ -139,6 +139,31 @@ def test_records_endpoint_accepts_valid_record_and_deduplicates():
     assert second["rejected"] == []
 
 
+def test_latest_endpoint_returns_latest_record_payload_for_client_integration():
+    server, _thread = start_server()
+    conn = HTTPConnection("127.0.0.1", server.server_port)
+    headers = {"Content-Type": "application/json", "Authorization": "Bearer secret"}
+
+    try:
+        conn.request("POST", "/api/v1/sessions/walk_1/records", body=sample_body("r1"), headers=headers)
+        post_response = conn.getresponse()
+        post_response.read()
+        conn.request("GET", "/api/v1/sessions/walk_1/latest")
+        latest_response = conn.getresponse()
+        latest = json.loads(latest_response.read())
+    finally:
+        conn.close()
+        stop_server(server)
+
+    assert post_response.status == 200
+    assert latest_response.status == 200
+    assert latest["record_id"] == "r1"
+    assert latest["device_id"] == "android_1"
+    assert latest["record"]["record_id"] == "r1"
+    assert latest["record"]["payload"]["ssid"] == "corp-wifi"
+    assert latest["payload"]["ssid"] == "corp-wifi"
+
+
 def test_records_endpoint_reports_first_probe_connection_once():
     connected = []
     server, _thread = start_server_with_connect_callback(connected.append)

@@ -7,8 +7,10 @@ import pwd
 import subprocess
 import sys
 import tempfile
+import urllib.request
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from .models import LocalClientState
 
@@ -168,6 +170,103 @@ def parse_netsh_output(output: str) -> LocalClientState:
         platform="win32",
         timestamp=datetime.now(),
     )
+
+
+def parse_android_latest_payload(payload: Any) -> LocalClientState:
+    record = _unwrap_android_record(payload)
+    if not isinstance(record, dict):
+        raise ValueError("Android latest payload must be a JSON object")
+
+    link_mbps = _string_value(record.get("link_mbps"))
+    probe = record.get("probe") if isinstance(record.get("probe"), dict) else {}
+    probe_status = _first_string(
+        record,
+        "probe_status",
+        "probeStatus",
+        "status",
+    ) or _string_value(probe.get("status"))
+    probe_summary = (
+        _first_string(record, "probe_summary", "probeSummary", "summary")
+        or _string_value(probe.get("summary"))
+    )
+
+    return LocalClientState(
+        interface_name=_first_string(record, "interface_name", "interface", "iface"),
+        ssid=_string_value(record.get("ssid")),
+        bssid=_string_value(record.get("bssid")),
+        channel=_android_channel(record),
+        tx_rate=_first_string(record, "tx_link_mbps", "txLinkMbps") or link_mbps,
+        rx_rate=_first_string(record, "rx_link_mbps", "rxLinkMbps") or link_mbps,
+        signal=_first_string(record, "rssi", "signal"),
+        security=_string_value(record.get("security")),
+        phy_mode=_first_string(record, "wifi_standard", "wifiStandard"),
+        ipv4_address=_first_string(
+            record,
+            "ipv4_address",
+            "ipv4Address",
+            "ip_address",
+            "ipAddress",
+        ),
+        ipv4_router=_first_string(record, "gateway", "ipv4_gateway", "ipv4Gateway"),
+        ping_status=_format_probe_status(probe_status, probe_summary),
+        platform="android",
+        timestamp=datetime.now(),
+    )
+
+
+def _unwrap_android_record(payload: Any) -> Any:
+    record = payload
+    for _ in range(5):
+        if not isinstance(record, dict):
+            break
+        for key in ("latest", "record", "payload"):
+            if key in record:
+                record = record[key]
+                break
+        else:
+            break
+    return record
+
+
+def _first_string(values: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = _string_value(values.get(key))
+        if value:
+            return value
+    return ""
+
+
+def _string_value(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _android_channel(record: dict[str, Any]) -> str:
+    channel = _string_value(record.get("channel"))
+    if channel:
+        return channel
+    frequency = _first_string(record, "frequency_mhz", "frequencyMhz")
+    if frequency:
+        return f"{frequency} MHz"
+    return ""
+
+
+def _format_probe_status(status: str, summary: str) -> str:
+    if status and summary:
+        return f"{status}: {summary}"
+    return status or summary
+
+
+class AndroidLatestStatePoller:
+    def __init__(self, latest_url: str, timeout: float = 10.0):
+        self.latest_url = latest_url
+        self.timeout = timeout
+
+    def poll(self) -> LocalClientState:
+        with urllib.request.urlopen(self.latest_url, timeout=self.timeout) as response:
+            payload = json.loads(response.read().decode("utf-8", errors="replace"))
+        return parse_android_latest_payload(payload)
 
 
 def build_ping_argv(host: str, platform: str | None = None) -> list[str]:

@@ -38,6 +38,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Polling interval in seconds. Defaults: local=1, combined=2, infra=5.",
     )
     parser.add_argument("--check", action="store_true", help="Validate local setup and exit")
+    parser.add_argument(
+        "--local-source",
+        choices=("os", "android"),
+        default="os",
+        help="Local telemetry source. Defaults to os.",
+    )
+    parser.add_argument(
+        "--android-latest-url",
+        default="",
+        help="URL for latest Android telemetry JSON when --local-source android is used.",
+    )
+    parser.add_argument(
+        "--android-receiver-url",
+        default="",
+        help="Receiver URL printed by wifiops probe receive.",
+    )
+    parser.add_argument(
+        "--android-session",
+        default="",
+        help="Android probe receiver session ID.",
+    )
     args = parser.parse_args(argv)
     if args.mode is None:
         args.mode = "infra" if args.mac else "local"
@@ -47,9 +68,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--interval must be greater than 0")
     if args.mode in ("infra", "combined") and not args.mac and not args.check:
         parser.error(f"--mode {args.mode} requires a MAC address")
+    if args.local_source == "android" and not args.android_latest_url:
+        if bool(args.android_receiver_url) != bool(args.android_session):
+            parser.error("--android-receiver-url and --android-session must be supplied together")
+        if args.android_receiver_url and args.android_session:
+            args.android_latest_url = build_android_latest_url(args.android_receiver_url, args.android_session)
+    if args.mode in ("local", "combined") and args.local_source == "android" and not args.android_latest_url and not args.check:
+        parser.error(
+            "--android-latest-url or --android-receiver-url with --android-session is required "
+            "when --local-source android"
+        )
     if args.mac and not is_valid_mac(args.mac):
         parser.error(f"Invalid MAC address format: {args.mac}")
     return args
+
+
+def build_android_latest_url(receiver_url: str, session_id: str) -> str:
+    return f"{receiver_url.rstrip('/')}/api/v1/sessions/{session_id}/latest"
 
 
 def main(argv: list[str] | None = None):
@@ -70,6 +105,8 @@ def main(argv: list[str] | None = None):
         mac=args.mac,
         log_path=args.log,
         poll_interval=args.interval,
+        local_source=args.local_source,
+        android_latest_url=args.android_latest_url,
     )
     app.run()
 

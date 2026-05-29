@@ -335,6 +335,74 @@ def test_c9800_client_preserves_combined_mode_and_interval():
     )
 
 
+def test_c9800_combined_passes_android_local_source_flags():
+    client_main = Mock(return_value=None)
+
+    with patch("client_tracker.cli.main", client_main):
+        exit_code = main(
+            [
+                "c9800",
+                "client",
+                "aa:bb:cc:dd:ee:ff",
+                "--mode",
+                "combined",
+                "--local-source",
+                "android",
+                "--android-latest-url",
+                "http://127.0.0.1:8765/latest",
+            ]
+        )
+
+    assert exit_code == 0
+    client_main.assert_called_once_with(
+        [
+            "aa:bb:cc:dd:ee:ff",
+            "--mode",
+            "combined",
+            "--local-source",
+            "android",
+            "--android-latest-url",
+            "http://127.0.0.1:8765/latest",
+        ]
+    )
+
+
+def test_c9800_combined_passes_android_receiver_session_flags():
+    client_main = Mock(return_value=None)
+
+    with patch("client_tracker.cli.main", client_main):
+        exit_code = main(
+            [
+                "c9800",
+                "client",
+                "aa:bb:cc:dd:ee:ff",
+                "--mode",
+                "combined",
+                "--local-source",
+                "android",
+                "--android-receiver-url",
+                "http://127.0.0.1:8765",
+                "--android-session",
+                "walk_1",
+            ]
+        )
+
+    assert exit_code == 0
+    client_main.assert_called_once_with(
+        [
+            "aa:bb:cc:dd:ee:ff",
+            "--mode",
+            "combined",
+            "--local-source",
+            "android",
+            "--android-receiver-url",
+            "http://127.0.0.1:8765",
+            "--android-session",
+            "walk_1",
+        ]
+    )
+
+
 def test_c9800_client_preserves_config_and_wlc_selection():
     client_main = Mock(return_value=None)
 
@@ -389,6 +457,91 @@ def test_client_local_delegates_to_client_tracker_local_mode():
     )
 
 
+def test_client_local_passes_android_local_source_flags():
+    client_main = Mock(return_value=None)
+
+    with patch("client_tracker.cli.main", client_main):
+        exit_code = main(
+            [
+                "client",
+                "local",
+                "--local-source",
+                "android",
+                "--android-latest-url",
+                "http://127.0.0.1:8765/latest",
+            ]
+        )
+
+    assert exit_code == 0
+    client_main.assert_called_once_with(
+        [
+            "--mode",
+            "local",
+            "--local-source",
+            "android",
+            "--android-latest-url",
+            "http://127.0.0.1:8765/latest",
+        ]
+    )
+
+
+def test_client_local_passes_android_receiver_session_flags():
+    client_main = Mock(return_value=None)
+
+    with patch("client_tracker.cli.main", client_main):
+        exit_code = main(
+            [
+                "client",
+                "local",
+                "--local-source",
+                "android",
+                "--android-receiver-url",
+                "http://127.0.0.1:8765",
+                "--android-session",
+                "walk_1",
+            ]
+        )
+
+    assert exit_code == 0
+    client_main.assert_called_once_with(
+        [
+            "--mode",
+            "local",
+            "--local-source",
+            "android",
+            "--android-receiver-url",
+            "http://127.0.0.1:8765",
+            "--android-session",
+            "walk_1",
+        ]
+    )
+
+
+def test_client_local_android_source_skips_macos_sudo_gate():
+    client_main = Mock(return_value=None)
+    sudo_ready = Mock(return_value=False)
+
+    with (
+        patch("wifiops.cli.sys.platform", "darwin"),
+        patch("wifiops.cli._macos_sudo_ready", sudo_ready, create=True),
+        patch("client_tracker.cli.main", client_main),
+    ):
+        exit_code = main(
+            [
+                "client",
+                "local",
+                "--local-source",
+                "android",
+                "--android-latest-url",
+                "http://127.0.0.1:8765/latest",
+            ]
+        )
+
+    assert exit_code == 0
+    sudo_ready.assert_not_called()
+    client_main.assert_called_once()
+
+
 def test_client_local_uses_wifiops_config_env(monkeypatch, tmp_path):
     config_path = tmp_path / "config.yaml"
     monkeypatch.setenv("WIFIOPS_CONFIG", str(config_path))
@@ -440,6 +593,34 @@ def test_c9800_combined_exits_before_live_ui_when_macos_sudo_is_not_ready(capsys
     assert "Run 'sudo -v' first" in captured.err
     sudo_ready.assert_called_once_with()
     client_main.assert_not_called()
+
+
+def test_c9800_combined_android_source_skips_macos_sudo_gate():
+    client_main = Mock(return_value=None)
+    sudo_ready = Mock(return_value=False)
+
+    with (
+        patch("wifiops.cli.sys.platform", "darwin"),
+        patch("wifiops.cli._macos_sudo_ready", sudo_ready, create=True),
+        patch("client_tracker.cli.main", client_main),
+    ):
+        exit_code = main(
+            [
+                "c9800",
+                "client",
+                "aa:bb:cc:dd:ee:ff",
+                "--mode",
+                "combined",
+                "--local-source",
+                "android",
+                "--android-latest-url",
+                "http://127.0.0.1:8765/latest",
+            ]
+        )
+
+    assert exit_code == 0
+    sudo_ready.assert_not_called()
+    client_main.assert_called_once()
 
 
 def test_c9800_infra_does_not_check_macos_sudo():

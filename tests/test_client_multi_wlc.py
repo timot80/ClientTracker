@@ -87,3 +87,25 @@ def test_client_tracker_clears_stale_ap_state_when_client_not_found(monkeypatch)
     assert app.wlc_state is None
     assert app.ap_state is None
     assert app.ap_error == ""
+
+
+def test_client_tracker_selects_android_local_poller(monkeypatch):
+    created = []
+
+    class FakeAndroidPoller:
+        def __init__(self, latest_url):
+            self.latest_url = latest_url
+            created.append(self)
+
+    monkeypatch.setattr("client_tracker.app.AndroidLatestStatePoller", FakeAndroidPoller)
+
+    app = ClientTrackerApp(
+        "local",
+        make_config(),
+        local_source="android",
+        android_latest_url="http://127.0.0.1:8765/latest",
+    )
+    app._setup()
+
+    assert app.local_poller is created[0]
+    assert created[0].latest_url == "http://127.0.0.1:8765/latest"

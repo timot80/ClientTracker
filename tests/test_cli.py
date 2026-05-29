@@ -105,3 +105,58 @@ def test_client_tracker_accepts_repeatable_wlc_selection():
     )
 
     assert args.wlc == ["mby-1", "mby-2"]
+
+
+def test_client_tracker_accepts_android_local_source_with_latest_url():
+    args = parse_client_args(
+        [
+            "--mode",
+            "local",
+            "--local-source",
+            "android",
+            "--android-latest-url",
+            "http://127.0.0.1:8765/latest",
+        ]
+    )
+
+    assert args.local_source == "android"
+    assert args.android_latest_url == "http://127.0.0.1:8765/latest"
+
+
+def test_client_tracker_builds_android_latest_url_from_receiver_session():
+    args = parse_client_args(
+        [
+            "--mode",
+            "local",
+            "--local-source",
+            "android",
+            "--android-receiver-url",
+            "http://[2602:80a:f000:2304:1cf4:82a3:6d2f:52c2]:8765/",
+            "--android-session",
+            "walk_7c6f57685051",
+        ]
+    )
+
+    assert (
+        args.android_latest_url
+        == "http://[2602:80a:f000:2304:1cf4:82a3:6d2f:52c2]:8765/api/v1/sessions/walk_7c6f57685051/latest"
+    )
+
+
+def test_client_tracker_requires_android_latest_url_for_android_source():
+    with pytest.raises(SystemExit):
+        parse_client_args(["--mode", "local", "--local-source", "android"])
+
+
+def test_client_tracker_requires_complete_android_receiver_session_pair():
+    with pytest.raises(SystemExit):
+        parse_client_args(
+            [
+                "--mode",
+                "local",
+                "--local-source",
+                "android",
+                "--android-receiver-url",
+                "http://127.0.0.1:8765",
+            ]
+        )

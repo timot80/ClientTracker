@@ -13,7 +13,7 @@ from .config import AppConfig, WlcClientTarget
 from .display import LiveDisplay
 from .events import CSVLogger, EventTimeline
 from .infra import APSessionPool, WLCSession
-from .local import LocalTelemetryPoller, play_roam_sound
+from .local import AndroidLatestStatePoller, LocalTelemetryPoller, play_roam_sound
 from .models import APClientState, LocalClientState, Mode, TrackerEvent, WLCClientState
 
 def detect_infra_roam(
@@ -85,11 +85,15 @@ class ClientTrackerApp:
         mac: str | None = None,
         log_path: str | Path | None = None,
         poll_interval: float = 5.0,
+        local_source: str = "os",
+        android_latest_url: str = "",
     ):
         self.mode = mode
         self.config = config
         self.mac = mac or ""
         self.poll_interval = poll_interval
+        self.local_source = local_source
+        self.android_latest_url = android_latest_url
         self.display = LiveDisplay()
         self.timeline = EventTimeline()
         self.logger = CSVLogger(log_path) if log_path else None
@@ -97,7 +101,7 @@ class ClientTrackerApp:
         self.wlc_sessions: list[tuple[WlcClientTarget, WLCSession]] = []
         self.active_wlc_name = ""
         self.ap_pool: APSessionPool | None = None
-        self.local_poller: LocalTelemetryPoller | None = None
+        self.local_poller: LocalTelemetryPoller | AndroidLatestStatePoller | None = None
         self.wlc_state: WLCClientState | None = None
         self.ap_state: APClientState | None = None
         self.local_state: LocalClientState | None = None
@@ -149,11 +153,14 @@ class ClientTrackerApp:
             if self.wlc_sessions:
                 self.wlc = self.wlc_sessions[0][1]
         if self.mode in ("local", "combined"):
-            self.local_poller = LocalTelemetryPoller(
-                ping_host=self.config.local.ping_host,
-                sound_alerts=self.config.local.sound_alerts,
-                identity_helper_path=self.config.local.identity_helper_path,
-            )
+            if self.local_source == "android":
+                self.local_poller = AndroidLatestStatePoller(self.android_latest_url)
+            else:
+                self.local_poller = LocalTelemetryPoller(
+                    ping_host=self.config.local.ping_host,
+                    sound_alerts=self.config.local.sound_alerts,
+                    identity_helper_path=self.config.local.identity_helper_path,
+                )
 
     def _poll_wlc(self):
         if not self.wlc_sessions:

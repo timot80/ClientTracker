@@ -110,6 +110,19 @@ def build_parser() -> argparse.ArgumentParser:
     c9800_client.add_argument("--log", help="Optional CSV log path")
     c9800_client.add_argument("--interval", type=float, help="Polling interval in seconds")
     c9800_client.add_argument("--wlc", action="append", default=[], help="Named WLC to include; repeatable")
+    c9800_client.add_argument(
+        "--local-source",
+        choices=("os", "android"),
+        default="os",
+        help="Local telemetry source for combined mode. Defaults to os.",
+    )
+    c9800_client.add_argument(
+        "--android-latest-url",
+        default="",
+        help="URL for latest Android telemetry JSON when --local-source android is used.",
+    )
+    c9800_client.add_argument("--android-receiver-url", default="", help="Receiver URL printed by wifiops probe receive")
+    c9800_client.add_argument("--android-session", default="", help="Android probe receiver session ID")
 
     ap = subcommands.add_parser("ap", help="Access point tools")
     ap_subcommands = ap.add_subparsers(dest="ap_command", required=True)
@@ -164,6 +177,19 @@ def build_parser() -> argparse.ArgumentParser:
     local.add_argument("--log", help="Optional CSV log path")
     local.add_argument("--interval", type=float, help="Polling interval in seconds")
     local.add_argument("--config", help="Path to config.yaml")
+    local.add_argument(
+        "--local-source",
+        choices=("os", "android"),
+        default="os",
+        help="Local telemetry source. Defaults to os.",
+    )
+    local.add_argument(
+        "--android-latest-url",
+        default="",
+        help="URL for latest Android telemetry JSON when --local-source android is used.",
+    )
+    local.add_argument("--android-receiver-url", default="", help="Receiver URL printed by wifiops probe receive")
+    local.add_argument("--android-session", default="", help="Android probe receiver session ID")
 
     check = subcommands.add_parser("check", help="Validate local client tracker setup and exit")
     check.add_argument("--config", help="Path to config.yaml")
@@ -191,7 +217,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "c9800" and args.c9800_command == "client":
         from client_tracker.cli import main as client_main
 
-        if args.mode == "combined" and not _macos_sudo_ready():
+        if args.mode == "combined" and args.local_source == "os" and not _macos_sudo_ready():
             return _macos_sudo_error()
         translated = [args.mac, "--mode", args.mode]
         if args.config:
@@ -204,6 +230,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             translated.extend(["--interval", _format_number(args.interval)])
         if args.log is not None:
             translated.extend(["--log", args.log])
+        if args.local_source != "os":
+            translated.extend(["--local-source", args.local_source])
+        if args.android_latest_url:
+            translated.extend(["--android-latest-url", args.android_latest_url])
+        if args.android_receiver_url:
+            translated.extend(["--android-receiver-url", args.android_receiver_url])
+        if args.android_session:
+            translated.extend(["--android-session", args.android_session])
         return _exit_code(client_main(translated))
 
     if args.command == "ap" and args.ap_command == "filesystems":
@@ -219,7 +253,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "client" and args.client_command == "local":
         from client_tracker.cli import main as client_main
 
-        if not _macos_sudo_ready():
+        if args.local_source == "os" and not _macos_sudo_ready():
             return _macos_sudo_error()
         translated = ["--mode", "local"]
         if args.config:
@@ -230,6 +264,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             translated.extend(["--interval", _format_number(args.interval)])
         if args.log is not None:
             translated.extend(["--log", args.log])
+        if args.local_source != "os":
+            translated.extend(["--local-source", args.local_source])
+        if args.android_latest_url:
+            translated.extend(["--android-latest-url", args.android_latest_url])
+        if args.android_receiver_url:
+            translated.extend(["--android-receiver-url", args.android_receiver_url])
+        if args.android_session:
+            translated.extend(["--android-session", args.android_session])
         return _exit_code(client_main(translated))
 
     if args.command == "check":

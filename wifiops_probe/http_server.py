@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import socket
 from collections.abc import Callable
+from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Lock
 from typing import Any
@@ -51,11 +52,14 @@ class ProbeRequestHandler(BaseHTTPRequestHandler):
             return
         if self.path == f"/api/v1/sessions/{self.server.session.session_id}/latest":
             latest = self.server.session.latest_record
+            record = asdict(latest) if latest else None
             self._json(
                 200,
                 {
                     "record_id": latest.record_id if latest else "",
                     "device_id": latest.device_id if latest else self.server.session.device_id,
+                    "record": record,
+                    "payload": latest.payload if latest else {},
                 },
             )
             return
