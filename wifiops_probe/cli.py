@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import io
 import ipaddress
 import json
 import sys
@@ -35,22 +36,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     logger = AndroidCSVLogger(args.log) if args.log else None
     advertised_host = args.advertise_host or args.host
     receiver_url = receiver_url_for_host(advertised_host, args.port)
-    pairing_payload = {
-        "receiver_url": receiver_url,
-        "session_id": session.session_id,
-        "token": token,
-    }
+    pairing_payload = build_pairing_payload(receiver_url, session.session_id, token)
 
     if not is_loopback_host(args.host):
         print(f"Warning: receiver is exposed on {format_host_port(args.host, args.port)}. Use only on trusted LANs.")
     print(f"Receiver URL: {receiver_url}")
     print(f"Session ID: {session.session_id}")
     print(f"Token: {redact_token(token)}")
+    print(render_pairing_qr(pairing_payload))
     print("Pairing payload:")
     print(json.dumps(pairing_payload, sort_keys=True))
 
     server_class = ProbeIPv6HTTPServer if is_ipv6_literal(args.host) else ProbeHTTPServer
-    server = server_class((args.host, args.port), ProbeRequestHandler, session=session, csv_logger=logger)
+    server = server_class(
+        (args.host, args.port),
+        ProbeRequestHandler,
+        session=session,
+        csv_logger=logger,
+        on_probe_connected=lambda record: print(
+            f"Probe connected: device={record.device_id} session={record.session_id} first_record={record.record_id}",
+            flush=True,
+        ),
+    )
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -60,6 +67,29 @@ def main(argv: Sequence[str] | None = None) -> int:
         if logger:
             logger.close()
     return 0
+
+
+def build_pairing_payload(receiver_url: str, session_id: str, token: str) -> dict[str, str]:
+    return {
+        "receiver_url": receiver_url,
+        "session_id": session_id,
+        "token": token,
+    }
+
+
+def render_pairing_qr(pairing_payload: dict[str, str]) -> str:
+    payload_json = json.dumps(pairing_payload, sort_keys=True)
+    try:
+        import qrcode
+    except ImportError:
+        return "Scan receiver QR code: unavailable. Install the qrcode package or paste the setup JSON below."
+
+    qr = qrcode.QRCode(border=1)
+    qr.add_data(payload_json)
+    qr.make(fit=True)
+    output = io.StringIO()
+    qr.print_ascii(out=output, tty=False)
+    return f"Scan receiver QR code:\n{output.getvalue().rstrip()}"
 
 
 def receiver_url_for_host(host: str, port: int) -> str:

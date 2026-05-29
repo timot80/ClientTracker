@@ -10,6 +10,8 @@ wifiops probe receive --pair --host 0.0.0.0 --advertise-host <wifiops-machine-ip
 
 Use this only on trusted test networks. Binding to `0.0.0.0` exposes the local receiver on the LAN; the receiver prints a warning when it binds outside loopback.
 
+The receiver prints a `Scan receiver QR code` block for the Android setup screen. It also keeps printing the setup JSON fallback for paste/manual setup.
+
 For IPv6-only or dual-stack tests, bind and advertise an IPv6 literal. The pairing URL will use brackets automatically:
 
 ```bash
@@ -32,7 +34,7 @@ wifiops probe receive --pair --host 127.0.0.1 --port 8765 --log /tmp/android-pro
 
 1. Install the debug APK on the Android phone.
 2. Open `wifiops probe`.
-3. Enter the receiver URL, session ID, and token shown by the `wifiops probe receive --pair` command, or paste the pairing JSON if available.
+3. Tap `Scan receiver QR code` and scan the QR code printed by the receiver, or paste the setup JSON if camera access is unavailable.
 4. Confirm the phone is on the same network as the advertised receiver address.
 5. Tap `Start`.
 6. Grant the requested Wi-Fi, notification, and precise location permissions. Android gates SSID/BSSID visibility behind location permission; the app does not collect GPS coordinates.
@@ -44,6 +46,7 @@ wifiops probe receive --pair --host 127.0.0.1 --port 8765 --log /tmp/android-pro
 ## Expected Results
 
 - The receiver terminal shows Android local client state.
+- The receiver terminal prints `Probe connected` after the first accepted upload.
 - BSSID changes appear as events.
 - Upload failures do not stop local collection.
 - Pending records are retried after connectivity returns.

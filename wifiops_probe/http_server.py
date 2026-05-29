@@ -2,19 +2,40 @@ from __future__ import annotations
 
 import json
 import socket
+from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from threading import Lock
 from typing import Any
 
-from .models import MAX_BODY_BYTES, TelemetryValidationError, parse_record_batch
+from .models import AndroidTelemetryRecord, MAX_BODY_BYTES, TelemetryValidationError, parse_record_batch
 from .security import parse_bearer_token
 from .state import ReceiverSession
 
 
 class ProbeHTTPServer(ThreadingHTTPServer):
-    def __init__(self, server_address, RequestHandlerClass, session: ReceiverSession, csv_logger=None):
+    def __init__(
+        self,
+        server_address,
+        RequestHandlerClass,
+        session: ReceiverSession,
+        csv_logger=None,
+        on_probe_connected: Callable[[AndroidTelemetryRecord], None] | None = None,
+    ):
         super().__init__(server_address, RequestHandlerClass)
         self.session = session
         self.csv_logger = csv_logger
+        self.on_probe_connected = on_probe_connected
+        self._probe_connected_reported = False
+        self._probe_connected_lock = Lock()
+
+    def report_probe_connected(self, record: AndroidTelemetryRecord):
+        if not self.on_probe_connected:
+            return
+        with self._probe_connected_lock:
+            if self._probe_connected_reported:
+                return
+            self._probe_connected_reported = True
+        self.on_probe_connected(record)
 
 
 class ProbeIPv6HTTPServer(ProbeHTTPServer):
@@ -74,6 +95,7 @@ class ProbeRequestHandler(BaseHTTPRequestHandler):
             status = self.server.session.ingest(record)
             if status == "accepted":
                 response["accepted"].append(record.record_id)
+                self.server.report_probe_connected(record)
                 if self.server.csv_logger:
                     self.server.csv_logger.write_record(record, status)
             elif status == "duplicate":

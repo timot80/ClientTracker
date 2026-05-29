@@ -195,6 +195,8 @@ python client_tracker.py --check
 wifiops probe receive --pair --host 0.0.0.0 --advertise-host <wifiops-machine-ip> --log walktest.csv
 ```
 
+The receiver prints a terminal QR code for Android setup, followed by the JSON payload fallback. When the probe uploads its first accepted record, the receiver prints the connected device and first record ID.
+
 Use `--host :: --advertise-host <wifiops-machine-ipv6>` for IPv6 receiver tests; pairing URLs for IPv6 literals are bracketed automatically. The Android app runs an explicit foreground walk-test session, stores samples locally before upload, and retries pending records when the receiver becomes reachable again. See [Android Probe Field Test](docs/android-probe-field-test.md).
 
 The MAC address can be supplied in common formats:

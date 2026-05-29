@@ -39,6 +39,14 @@ def start_server():
     return server, thread
 
 
+def start_server_with_connect_callback(callback):
+    session = ReceiverSession(session_id="walk_1", token="secret")
+    server = ProbeHTTPServer(("127.0.0.1", 0), ProbeRequestHandler, session=session, on_probe_connected=callback)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, thread
+
+
 def stop_server(server: ProbeHTTPServer):
     server.shutdown()
     server.server_close()
@@ -129,6 +137,30 @@ def test_records_endpoint_accepts_valid_record_and_deduplicates():
     assert second["accepted"] == []
     assert second["duplicate"] == ["r1"]
     assert second["rejected"] == []
+
+
+def test_records_endpoint_reports_first_probe_connection_once():
+    connected = []
+    server, _thread = start_server_with_connect_callback(connected.append)
+    conn = HTTPConnection("127.0.0.1", server.server_port)
+    headers = {"Content-Type": "application/json", "Authorization": "Bearer secret"}
+
+    try:
+        conn.request("POST", "/api/v1/sessions/walk_1/records", body=sample_body("r1"), headers=headers)
+        first_response = conn.getresponse()
+        first_response.read()
+        conn.request("POST", "/api/v1/sessions/walk_1/records", body=sample_body("r2"), headers=headers)
+        second_response = conn.getresponse()
+        second_response.read()
+    finally:
+        conn.close()
+        stop_server(server)
+
+    assert first_response.status == 200
+    assert second_response.status == 200
+    assert len(connected) == 1
+    assert connected[0].device_id == "android_1"
+    assert connected[0].record_id == "r1"
 
 
 def test_records_endpoint_rejects_invalid_json():
