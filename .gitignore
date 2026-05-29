@@ -9,3 +9,6 @@ __pycache__/
 dist/
 *.csv
 *.log
+android/**/.gradle/
+android/**/build/
+android/**/local.properties

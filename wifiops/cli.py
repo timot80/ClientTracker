@@ -140,6 +140,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Confirm AP reloads for --reload-full-tmp",
     )
 
+    probe = subcommands.add_parser("probe", help="Android probe telemetry receiver")
+    probe_subcommands = probe.add_subparsers(dest="probe_command", required=True)
+    receive = probe_subcommands.add_parser(
+        "receive",
+        help="Receive Android probe telemetry",
+        description="Receive Android probe telemetry from the wifiops probe app.",
+    )
+    receive.add_argument("--pair", action="store_true", required=True, help="Create a pairing session")
+    receive.add_argument("--host", default="127.0.0.1", help="Bind host")
+    receive.add_argument("--port", type=int, default=8765, help="Bind port")
+    receive.add_argument("--advertise-host", default="", help="Host/IP encoded into pairing URL")
+    receive.add_argument("--log", help="Optional Android telemetry CSV log path")
+
     client = subcommands.add_parser("client", help="Local client telemetry tools")
     client_subcommands = client.add_subparsers(dest="client_command", required=True)
 
@@ -197,6 +210,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         from ap_filesystem_audit.cli import main as filesystems_main
 
         return _exit_code(filesystems_main(_delegated_args(argv, "filesystems")))
+
+    if args.command == "probe" and args.probe_command == "receive":
+        from wifiops_probe.cli import main as probe_main
+
+        return _exit_code(probe_main(_delegated_args(argv, "receive")))
 
     if args.command == "client" and args.client_command == "local":
         from client_tracker.cli import main as client_main

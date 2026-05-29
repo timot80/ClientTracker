@@ -265,6 +265,18 @@ Validate local setup without starting a tracking loop:
 python client_tracker.py --check
 ```
 
+### Android Probe Receiver
+
+`wifiops` can receive Android walk-test telemetry from the native wifiops probe app:
+
+```bash
+wifiops probe receive --pair --host 0.0.0.0 --advertise-host <wifiops-machine-ip> --log walktest.csv
+```
+
+The receiver prints a terminal QR code for Android setup, followed by the JSON payload fallback. When the probe uploads its first accepted record, the receiver prints the connected device and first record ID.
+
+Use `--host :: --advertise-host <wifiops-machine-ipv6>` for IPv6 receiver tests; pairing URLs for IPv6 literals are bracketed automatically. The Android app runs an explicit foreground walk-test session, stores samples locally before upload, and retries pending records when the receiver becomes reachable again. See [Android Probe Field Test](docs/android-probe-field-test.md).
+
 The MAC address can be supplied in common formats:
 
 ```bash

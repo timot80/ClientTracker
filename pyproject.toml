@@ -11,6 +11,7 @@ dependencies = [
   "keyring>=25.0.0",
   "netmiko>=4.3.0",
   "pyyaml>=6.0",
+  "qrcode>=8.0",
   "rich>=13.7.0",
   "colorama>=0.4.6",
 ]
@@ -19,7 +20,7 @@ dependencies = [
 wifiops = "wifiops.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["ap_radio_monitor*", "ap_port_audit*", "ap_filesystem_audit*", "client_tracker*", "wifiops*"]
+include = ["ap_radio_monitor*", "ap_port_audit*", "ap_filesystem_audit*", "client_tracker*", "wifiops*", "wifiops_probe*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
