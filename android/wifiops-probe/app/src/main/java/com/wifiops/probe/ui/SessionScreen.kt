@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
@@ -16,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.wifiops.probe.PreflightCheck
 import com.wifiops.probe.PreflightRecoveryAction
@@ -66,50 +69,13 @@ fun SessionScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
+            .padding(horizontal = 20.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text(
-            text = "Active session",
-            style = MaterialTheme.typography.headlineSmall
-        )
-        StatusLine(label = "Receiver", value = state.pairing.receiverUrl)
-        StatusLine(label = "Session", value = state.pairing.sessionId)
-        StatusLine(label = "Service", value = if (state.running) "Running" else "Stopped")
-        StatusLine(
-            label = "Receiver status",
-            value = when (state.receiverReachable) {
-                true -> "Reachable"
-                false -> "Unreachable"
-                null -> "Not checked"
-            }
-        )
-
-        if (state.preflightChecks.isNotEmpty()) {
-            HorizontalDivider()
-            Text(
-                text = "Preflight",
-                style = MaterialTheme.typography.titleMedium
-            )
-            state.preflightChecks.forEach { check ->
-                PreflightRow(check = check, onPreflightAction = onPreflightAction)
-            }
-        }
-
-        HorizontalDivider()
-        Text(
-            text = "Latest Wi-Fi sample",
-            style = MaterialTheme.typography.titleMedium
-        )
-        LatestTelemetry(state.latestTelemetry)
-
-        HorizontalDivider()
-        Text(
-            text = "Telemetry counters",
-            style = MaterialTheme.typography.titleMedium
-        )
-        CounterRow(state.counters)
+        HeaderStatus(state)
 
         state.permissionMessage?.let {
             Text(
@@ -119,22 +85,29 @@ fun SessionScreen(
             )
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            if (state.running) {
-                Button(onClick = onStop, modifier = Modifier.weight(1f)) {
-                    Text("Stop session")
+        SessionActions(
+            running = state.running,
+            onStart = onStart,
+            onStop = onStop,
+            onPairDifferentReceiver = onPairDifferentReceiver
+        )
+
+        HorizontalDivider()
+        SectionTitle("Latest Wi-Fi sample")
+        LatestTelemetry(state.latestTelemetry)
+
+        HorizontalDivider()
+        SectionTitle("Counters")
+        CounterRow(state.counters)
+
+        if (state.preflightChecks.isNotEmpty()) {
+            HorizontalDivider()
+            SectionTitle("Preflight")
+            state.preflightChecks
+                .sortedBy { if (it.state == PreflightState.Ready) 1 else 0 }
+                .forEach { check ->
+                    PreflightRow(check = check, onPreflightAction = onPreflightAction)
                 }
-            } else {
-                Button(onClick = onStart, modifier = Modifier.weight(1f)) {
-                    Text("Start session")
-                }
-            }
-            OutlinedButton(onClick = onPairDifferentReceiver, modifier = Modifier.weight(1f)) {
-                Text("Change receiver")
-            }
         }
 
         OutlinedButton(
@@ -147,17 +120,95 @@ fun SessionScreen(
 }
 
 @Composable
+private fun HeaderStatus(state: SessionUiState) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "Active session", style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    text = state.pairing.sessionId,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Column {
+                Text(text = "Service", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    text = if (state.running) "Running" else "Stopped",
+                    color = if (state.running) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+        }
+        CompactStatusLine(label = "Receiver", value = state.pairing.receiverUrl)
+        CompactStatusLine(
+            label = "Reachability",
+            value = when (state.receiverReachable) {
+                true -> "Reachable"
+                false -> "Unreachable"
+                null -> "Not checked"
+            }
+        )
+    }
+}
+
+@Composable
+private fun SessionActions(
+    running: Boolean,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+    onPairDifferentReceiver: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        if (running) {
+            Button(onClick = onStop, modifier = Modifier.weight(1f)) {
+                Text("Stop session")
+            }
+        } else {
+            Button(onClick = onStart, modifier = Modifier.weight(1f)) {
+                Text("Start session")
+            }
+        }
+        OutlinedButton(onClick = onPairDifferentReceiver, modifier = Modifier.weight(1f)) {
+            Text("Change receiver")
+        }
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(text = text, style = MaterialTheme.typography.titleMedium)
+}
+
+@Composable
 private fun PreflightRow(
     check: PreflightCheck,
     onPreflightAction: (PreflightRecoveryAction) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(text = check.title, style = MaterialTheme.typography.labelLarge)
-        Text(
-            text = check.state.label,
-            color = preflightStateColor(check.state),
-            style = MaterialTheme.typography.bodyLarge
-        )
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = check.title,
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = check.state.label,
+                color = preflightStateColor(check.state),
+                style = MaterialTheme.typography.labelLarge
+            )
+        }
         Text(text = check.detail, style = MaterialTheme.typography.bodyMedium)
         check.recoveryAction?.let { action ->
             OutlinedButton(onClick = { onPreflightAction(action) }) {
@@ -180,36 +231,64 @@ private fun preflightStateColor(state: PreflightState): Color {
 @Composable
 private fun LatestTelemetry(summary: LatestTelemetrySummary?) {
     if (summary == null) {
-        StatusLine(label = "Last sample", value = "No sample yet")
-        StatusLine(label = "Availability", value = "Unavailable")
+        CompactStatusLine(label = "Last sample", value = "No sample yet")
+        CompactStatusLine(label = "Availability", value = "Unavailable")
         return
     }
 
-    StatusLine(label = "SSID", value = summary.ssid ?: "Unavailable")
-    StatusLine(label = "BSSID", value = summary.bssid ?: "Unavailable")
-    StatusLine(label = "RSSI", value = summary.rssi?.let { "$it dBm" } ?: "Unavailable")
-    StatusLine(
-        label = "Channel",
-        value = when {
-            summary.channel != null && summary.frequencyMhz != null -> "${summary.channel} (${summary.frequencyMhz} MHz)"
-            summary.channel != null -> summary.channel
-            summary.frequencyMhz != null -> "${summary.frequencyMhz} MHz"
-            else -> "Unavailable"
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            StatusTile(label = "RSSI", value = summary.rssi?.let { "$it dBm" } ?: "Unavailable", modifier = Modifier.weight(1f))
+            StatusTile(
+                label = "Channel",
+                value = when {
+                    summary.channel != null && summary.frequencyMhz != null -> "${summary.channel} / ${summary.frequencyMhz} MHz"
+                    summary.channel != null -> summary.channel
+                    summary.frequencyMhz != null -> "${summary.frequencyMhz} MHz"
+                    else -> "Unavailable"
+                },
+                modifier = Modifier.weight(1f)
+            )
         }
-    )
-    StatusLine(label = "Availability", value = summary.availability)
-    StatusLine(label = "Last sample", value = summary.sampleTime ?: "No sample yet")
-    StatusLine(label = "Last upload status", value = summary.uploadStatus)
-    StatusLine(label = "Gateway probe", value = summary.gatewayProbe)
-    StatusLine(label = "DNS probe", value = summary.dnsProbe)
-    StatusLine(label = "HTTP probe", value = summary.httpProbe)
+        CompactStatusLine(label = "SSID", value = summary.ssid ?: "Unavailable")
+        CompactStatusLine(label = "BSSID", value = summary.bssid ?: "Unavailable")
+        CompactStatusLine(label = "Availability", value = summary.availability)
+        CompactStatusLine(label = "Upload", value = summary.uploadStatus)
+        CompactStatusLine(label = "Last sample", value = summary.sampleTime ?: "No sample yet")
+        CompactStatusLine(label = "Gateway probe", value = summary.gatewayProbe)
+        CompactStatusLine(label = "DNS probe", value = summary.dnsProbe)
+        CompactStatusLine(label = "HTTP probe", value = summary.httpProbe)
+    }
 }
 
 @Composable
-private fun StatusLine(label: String, value: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+private fun CompactStatusLine(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         Text(text = label, style = MaterialTheme.typography.labelLarge)
-        Text(text = value, style = MaterialTheme.typography.bodyLarge)
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun StatusTile(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(text = label, style = MaterialTheme.typography.labelLarge)
+        Text(text = value, style = MaterialTheme.typography.titleMedium)
     }
 }
 

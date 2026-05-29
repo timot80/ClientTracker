@@ -3,15 +3,17 @@ package com.wifiops.probe.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -44,6 +46,7 @@ fun PairScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var scanning by remember { mutableStateOf(false) }
     var waitingForCameraPermission by remember { mutableStateOf(false) }
+    var fallbackMode by remember { mutableStateOf<SetupFallbackMode?>(null) }
 
     LaunchedEffect(cameraPermissionGranted, waitingForCameraPermission) {
         if (cameraPermissionGranted && waitingForCameraPermission) {
@@ -55,9 +58,11 @@ fun PairScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 20.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text(
             text = "Receiver setup",
@@ -81,6 +86,7 @@ fun PairScreen(
         ) {
             Text("Scan receiver QR code")
         }
+
         cameraPermissionMessage?.let {
             Text(
                 text = it,
@@ -122,101 +128,15 @@ fun PairScreen(
         }
 
         savedPairing?.let { saved ->
-            Text(
-                text = "Saved receiver",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Text(
-                text = saved.receiverUrl,
-                style = MaterialTheme.typography.bodyMedium
-            )
+            HorizontalDivider()
+            SectionTitle("Saved receiver")
+            Text(text = saved.receiverUrl, style = MaterialTheme.typography.bodyMedium)
             OutlinedButton(
                 onClick = { onPaired(saved) },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Use saved receiver")
             }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "Set up new receiver",
-                style = MaterialTheme.typography.titleMedium
-            )
-        }
-
-        Text(
-            text = "Paste setup JSON",
-            style = MaterialTheme.typography.titleMedium
-        )
-        OutlinedTextField(
-            value = payloadJson,
-            onValueChange = { payloadJson = it },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(112.dp),
-            label = { Text("Receiver setup JSON") }
-        )
-        Button(
-            onClick = {
-                runCatching {
-                    PairingPayload.parse(payloadJson)
-                }.onSuccess {
-                    error = null
-                    receiverUrl = it.receiverUrl
-                    sessionId = it.sessionId
-                    token = it.token
-                    onPaired(it)
-                }.onFailure {
-                    error = it.message ?: "Receiver setup JSON is invalid"
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Paste setup JSON")
-        }
-
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "Enter receiver details",
-            style = MaterialTheme.typography.titleMedium
-        )
-        OutlinedTextField(
-            value = receiverUrl,
-            onValueChange = { receiverUrl = it },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            label = { Text("Receiver URL") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
-        )
-        OutlinedTextField(
-            value = sessionId,
-            onValueChange = { sessionId = it },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            label = { Text("Session ID") }
-        )
-        OutlinedTextField(
-            value = token,
-            onValueChange = { token = it },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            label = { Text("Token") },
-            visualTransformation = PasswordVisualTransformation()
-        )
-
-        Button(
-            onClick = {
-                runCatching {
-                    PairingPayload.fromManualFields(receiverUrl, sessionId, token)
-                }.onSuccess {
-                    error = null
-                    onPaired(it)
-                }.onFailure {
-                    error = it.message ?: "Receiver setup values are invalid"
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Enter receiver details")
         }
 
         error?.let {
@@ -225,6 +145,149 @@ fun PairScreen(
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium
             )
+        }
+
+        HorizontalDivider()
+        SectionTitle("Fallback setup")
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            OutlinedButton(
+                onClick = { fallbackMode = SetupFallbackMode.PasteJson },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Paste JSON")
+            }
+            OutlinedButton(
+                onClick = { fallbackMode = SetupFallbackMode.ManualEntry },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Enter manually")
+            }
+        }
+
+        when (fallbackMode) {
+            SetupFallbackMode.PasteJson -> PasteJsonSection(
+                payloadJson = payloadJson,
+                onPayloadJsonChange = { payloadJson = it },
+                onSubmit = {
+                    runCatching {
+                        PairingPayload.parse(payloadJson)
+                    }.onSuccess {
+                        error = null
+                        receiverUrl = it.receiverUrl
+                        sessionId = it.sessionId
+                        token = it.token
+                        onPaired(it)
+                    }.onFailure {
+                        error = it.message ?: "Receiver setup JSON is invalid"
+                    }
+                }
+            )
+
+            SetupFallbackMode.ManualEntry -> ManualEntrySection(
+                receiverUrl = receiverUrl,
+                sessionId = sessionId,
+                token = token,
+                onReceiverUrlChange = { receiverUrl = it },
+                onSessionIdChange = { sessionId = it },
+                onTokenChange = { token = it },
+                onSubmit = {
+                    runCatching {
+                        PairingPayload.fromManualFields(receiverUrl, sessionId, token)
+                    }.onSuccess {
+                        error = null
+                        onPaired(it)
+                    }.onFailure {
+                        error = it.message ?: "Receiver setup values are invalid"
+                    }
+                }
+            )
+
+            null -> Text(
+                text = "Use these only if scanning is not available.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+private enum class SetupFallbackMode {
+    PasteJson,
+    ManualEntry
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(text = text, style = MaterialTheme.typography.titleMedium)
+}
+
+@Composable
+private fun PasteJsonSection(
+    payloadJson: String,
+    onPayloadJsonChange: (String) -> Unit,
+    onSubmit: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        OutlinedTextField(
+            value = payloadJson,
+            onValueChange = onPayloadJsonChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 120.dp),
+            label = { Text("Receiver setup JSON") }
+        )
+        Button(
+            onClick = onSubmit,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Use pasted setup")
+        }
+    }
+}
+
+@Composable
+private fun ManualEntrySection(
+    receiverUrl: String,
+    sessionId: String,
+    token: String,
+    onReceiverUrlChange: (String) -> Unit,
+    onSessionIdChange: (String) -> Unit,
+    onTokenChange: (String) -> Unit,
+    onSubmit: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        OutlinedTextField(
+            value = receiverUrl,
+            onValueChange = onReceiverUrlChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("Receiver URL") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+        )
+        OutlinedTextField(
+            value = sessionId,
+            onValueChange = onSessionIdChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("Session ID") }
+        )
+        OutlinedTextField(
+            value = token,
+            onValueChange = onTokenChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("Token") },
+            visualTransformation = PasswordVisualTransformation()
+        )
+
+        Button(
+            onClick = onSubmit,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Use receiver details")
         }
     }
 }
