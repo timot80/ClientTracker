@@ -9,12 +9,13 @@ import org.junit.Test
 
 class PermissionPolicyTest {
     @Test
-    fun runtimePermissionsForAndroidThirteenIncludeNearbyAndNotificationsButNotFineLocation() {
+    fun runtimePermissionsForAndroidThirteenIncludeNearbyFineLocationAndNotifications() {
         val permissions = requiredRuntimePermissions(Build.VERSION_CODES.TIRAMISU)
 
         assertEquals(
             listOf(
                 Manifest.permission.NEARBY_WIFI_DEVICES,
+                Manifest.permission.ACCESS_FINE_LOCATION,
                 Manifest.permission.POST_NOTIFICATIONS
             ),
             permissions
@@ -41,7 +42,7 @@ class PermissionPolicyTest {
             PermissionGrantState(
                 apiLevel = Build.VERSION_CODES.TIRAMISU,
                 nearbyWifiGranted = true,
-                fineLocationGranted = false,
+                fineLocationGranted = true,
                 backgroundLocationGranted = false,
                 notificationsGranted = false,
                 wifiConnected = true,
@@ -54,6 +55,26 @@ class PermissionPolicyTest {
         assertEquals(PreflightState.LimitedData, notificationCheck.state)
         assertFalse(notificationCheck.blocksSession)
         assertEquals("Limited notification status", notificationCheck.title)
+    }
+
+    @Test
+    fun fineLocationDenialBlocksWifiIdentityOnAndroidThirteen() {
+        val checks = preflightChecks(
+            PermissionGrantState(
+                apiLevel = Build.VERSION_CODES.TIRAMISU,
+                nearbyWifiGranted = true,
+                fineLocationGranted = false,
+                backgroundLocationGranted = false,
+                notificationsGranted = true,
+                wifiConnected = true,
+                receiverReachable = true
+            )
+        )
+
+        val locationCheck = checks.first { it.id == PreflightCheckId.Location }
+
+        assertEquals(PreflightState.Blocked, locationCheck.state)
+        assertTrue(locationCheck.blocksSession)
     }
 
     @Test

@@ -7,6 +7,7 @@ fun requiredRuntimePermissions(apiLevel: Int = Build.VERSION.SDK_INT): List<Stri
     return when {
         apiLevel >= Build.VERSION_CODES.TIRAMISU -> listOf(
             Manifest.permission.NEARBY_WIFI_DEVICES,
+            Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.POST_NOTIFICATIONS
         )
 
@@ -79,14 +80,16 @@ fun preflightChecks(grants: PermissionGrantState): List<PreflightCheck> {
             state = if (grants.nearbyWifiGranted) PreflightState.Ready else PreflightState.Blocked,
             recoveryAction = if (grants.nearbyWifiGranted) null else PreflightRecoveryAction.OpenSettings
         )
-    } else if (grants.apiLevel >= Build.VERSION_CODES.Q) {
+    }
+
+    if (grants.apiLevel >= Build.VERSION_CODES.Q) {
         checks += PreflightCheck(
             id = PreflightCheckId.Location,
-            title = "Location permission",
+            title = "Precise location permission",
             detail = if (grants.fineLocationGranted) {
-                "Wi-Fi identity collection is available on this Android version."
+                "Android can expose SSID, BSSID, RSSI, and channel for this Wi-Fi session."
             } else {
-                "Allow location so Android can expose SSID, BSSID, RSSI, and channel."
+                "Allow precise location so Android can expose SSID, BSSID, RSSI, and channel."
             },
             state = if (grants.fineLocationGranted) PreflightState.Ready else PreflightState.Blocked,
             recoveryAction = if (grants.fineLocationGranted) null else PreflightRecoveryAction.OpenSettings
